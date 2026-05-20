@@ -1,0 +1,170 @@
+@page "/"
+@inject TcgDexService TcgDex
+@inject NavigationManager Nav
+
+<PageTitle>Clint's Trading Co.</PageTitle>
+
+<div class="sets-page">
+    <h2 class="page-title">All Sets</h2>
+
+    @if (_loading)
+    {
+        <div class="loading-screen">
+            <div class="pokeball-spinner"></div>
+            <p>Loading sets&hellip;</p>
+        </div>
+    }
+    else if (_error is not null)
+    {
+        <div class="error-banner"><strong>Failed to load sets:</strong> @_error</div>
+    }
+    else
+    {
+        var totalFiltered = _groups.Sum(g => g.Sets.Count);
+        <div class="collection-controls">
+            <div class="controls-inner">
+                <span class="stat-chip">@totalFiltered / @_sets.Count sets</span>
+                <input class="search-input" type="text" placeholder="Search sets…"
+                       @bind="_search" @bind:event="oninput" @bind:after="ApplyFilter" />
+            </div>
+        </div>
+
+        @foreach (var (serie, sets) in _groups)
+        {
+            <div class="series-section">
+                <h3 class="series-header">@SeriesDisplayName(serie)</h3>
+                <div class="sets-grid">
+                    @foreach (var set in sets)
+                    {
+                        <div class="set-card" @onclick="() => GoToSet(set.Id)">
+                            @if (set.Logo is not null)
+                            {
+                                <img class="set-logo" src="@(set.Logo + ".webp")" alt="@set.Name"
+                                     loading="lazy"
+                                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+                                <div class="set-logo-placeholder" style="display:none">@set.Name</div>
+                            }
+                            else
+                            {
+                                <div class="set-logo-placeholder">@set.Name</div>
+                            }
+                            <div class="set-info">
+                                <span class="set-name">@set.Name</span>
+                                <span class="set-count">@(set.CardCount?.Total ?? 0) cards &bull; @set.Id</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (_groups.Count == 0)
+        {
+            <div class="loc-empty">No sets match your search.</div>
+        }
+    }
+</div>
+
+@code {
+    private List<SetBrief> _sets = new();
+    private List<(string Serie, List<SetBrief> Sets)> _allGroups = new();
+    private List<(string Serie, List<SetBrief> Sets)> _groups = new();
+    private bool _loading = true;
+    private string? _error;
+    private string _search = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var raw = await TcgDex.GetSetsAsync();
+
+            var named    = new List<(string serie, List<SetBrief> sets)>();
+            var namedIdx = new Dictionary<string, int>();
+            var ungrouped = new List<SetBrief>();
+
+            foreach (var set in raw)
+            {
+                if (IsTcgpSet(set)) continue;
+                var s = SerieOf(set);
+                if (s is null) { ungrouped.Add(set); continue; }
+                if (!namedIdx.TryGetValue(s, out var i))
+                {
+                    i = named.Count;
+                    named.Add((s, new List<SetBrief>()));
+                    namedIdx[s] = i;
+                }
+                named[i].sets.Add(set);
+            }
+
+            // Newest series first, newest set first within each series
+            named.Reverse();
+            foreach (var g in named) g.sets.Reverse();
+            if (ungrouped.Count > 0)
+                named.Add(("other", ungrouped));
+
+            _allGroups = named.Select(g => (Serie: g.serie, Sets: g.sets)).ToList();
+            _sets      = _allGroups.SelectMany(g => g.Sets).ToList();
+            _groups    = _allGroups;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ApplyFilter()
+    {
+        if (string.IsNullOrWhiteSpace(_search)) { _groups = _allGroups; return; }
+        _groups = _allGroups
+            .Select(g => (
+                g.Serie,
+                Sets: g.Sets
+                    .Where(s => s.Name.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                                s.Id.Contains(_search, StringComparison.OrdinalIgnoreCase))
+                    .ToList()
+            ))
+            .Where(g => g.Sets.Count > 0)
+            .ToList();
+    }
+
+    private void GoToSet(string id) => Nav.NavigateTo("/set/" + id);
+
+    // TCGP sets: logo path contains /tcgp/, or no logo but ID starts uppercase (e.g. A1, B1a)
+    private static bool IsTcgpSet(SetBrief set) =>
+        SerieOf(set) == "tcgp" ||
+        (set.Logo is null && set.Id.Length > 0 && char.IsUpper(set.Id[0]));
+
+    private static string? SerieOf(SetBrief set)
+    {
+        if (set.Logo is null) return null;
+        var parts = set.Logo.Split('/');
+        var en = Array.IndexOf(parts, "en");
+        return en >= 0 && en + 1 < parts.Length ? parts[en + 1] : null;
+    }
+
+    private static readonly Dictionary<string, string> SeriesNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["sv"]    = "Scarlet & Violet",
+        ["swsh"]  = "Sword & Shield",
+        ["sm"]    = "Sun & Moon",
+        ["xy"]    = "XY",
+        ["bw"]    = "Black & White",
+        ["hgss"]  = "HeartGold SoulSilver",
+        ["dp"]    = "Diamond & Pearl",
+        ["ex"]    = "EX Series",
+        ["ecard"] = "E-Card Series",
+        ["neo"]   = "Neo Series",
+        ["gym"]   = "Gym Series",
+        ["tr"]    = "Team Rocket",
+        ["base"]  = "Base Set Era",
+        ["other"] = "Other",
+    };
+
+    private static string SeriesDisplayName(string slug) =>
+        SeriesNames.TryGetValue(slug, out var name) ? name : slug.ToUpperInvariant();
+}

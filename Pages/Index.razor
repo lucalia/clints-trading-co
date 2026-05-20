@@ -1,0 +1,197 @@
+@page "/set/{SetId}"
+@inject TcgDexService TcgDex
+@inject CollectionService Collection
+@inject IJSRuntime JS
+
+<PageTitle>@(_set?.Name ?? SetId) &mdash; Clint's Trading Co.</PageTitle>
+
+@if (_loading)
+{
+    <div class="loading-screen">
+        <div class="pokeball-spinner"></div>
+        <p>Loading @SetId&hellip;</p>
+    </div>
+}
+else if (_error is not null)
+{
+    <div class="error-banner"><strong>Failed to load cards:</strong> @_error</div>
+}
+else if (_set is not null)
+{
+    <div class="set-hero" id="set-hero">
+        <a class="set-back-btn" href="/" title="All Sets">&#8592;</a>
+        @if (_set.Logo is not null)
+        {
+            <img class="set-hero-logo" src="@(_set.Logo + ".webp")" alt="@_set.Name"
+                 onerror="this.style.display='none'" />
+        }
+        <div class="set-hero-info">
+            <h1 class="set-hero-name">@_set.Name</h1>
+            <span class="set-hero-meta">@_set.CardCount.Total cards &bull; @_set.Id</span>
+        </div>
+    </div>
+
+    <div class="collection-controls">
+        <div class="controls-inner">
+            <input class="search-input"
+                   type="text"
+                   placeholder="Search cards…"
+                   @bind="_search"
+                   @bind:event="oninput"
+                   @bind:after="ApplyFilters" />
+            <div class="filter-chips">
+                <button class="filter-chip @(_collectionFilter=="all"?"active":"")"     @onclick='() => SetFilter("all")'>All</button>
+                <button class="filter-chip @(_collectionFilter=="owned"?"active":"")"   @onclick='() => SetFilter("owned")'>Owned</button>
+                <button class="filter-chip @(_collectionFilter=="missing"?"active":"")" @onclick='() => SetFilter("missing")'>Missing</button>
+            </div>
+            <span class="stat-chip">@_filtered.Count / @_set.Cards.Count</span>
+        </div>
+    </div>
+
+    <div class="card-grid">
+        @foreach (var card in _filtered)
+        {
+            var chips = VariantChips(card.Id);
+            <div class="card-tile @(_selectedCard?.Id == card.Id ? "selected" : "")"
+                 @onclick="() => SelectCardAsync(card)">
+                <div class="card-image-wrap">
+                    @if (card.Image is not null)
+                    {
+                        <img class="card-image"
+                             src="@(card.Image + "/low.webp")"
+                             alt="@card.Name"
+                             loading="lazy"
+                             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+                        <div class="card-image-placeholder" style="display:none">?</div>
+                    }
+                    else
+                    {
+                        <div class="card-image-placeholder">?</div>
+                    }
+                    @if (chips.Count > 0)
+                    {
+                        <div class="card-variant-overlay">
+                            @foreach (var (variant, count) in chips)
+                            {
+                                <span class="variant-chip">@VariantShort(variant) &#215;@count</span>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="card-tile-footer">
+                    <span class="card-tile-name">@card.Name</span>
+                    <span class="card-tile-id">#@card.LocalId</span>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<CardDetailModal @ref="_modal"
+                 OnCountChanged="HandleCountChanged"
+                 OnClose="HandleModalClose" />
+
+@code {
+    [Parameter] public string SetId { get; set; } = "";
+
+    private SetResponse? _set;
+    private List<CardBrief> _filtered = new();
+    private CardBrief? _selectedCard;
+    private bool _loading = true;
+    private string? _error;
+    private string _search = "";
+    private string _collectionFilter = "all";
+    private Dictionary<string, int> _counts = new();
+    private Dictionary<string, int> _variantCounts = new();
+    private CardDetailModal? _modal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var setTask     = TcgDex.GetSetAsync(SetId);
+            var variantTask = Collection.GetAllVariantCountsAsync();
+            await Task.WhenAll(setTask, variantTask);
+            _set           = setTask.Result;
+            _variantCounts = variantTask.Result;
+            _counts        = _variantCounts
+                .GroupBy(kv => kv.Key.Split(':')[0])
+                .ToDictionary(g => g.Key, g => g.Sum(kv => kv.Value));
+            _filtered = _set?.Cards ?? new();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _set is not null)
+            await JS.InvokeVoidAsync("initSetHero");
+    }
+
+    private void ApplyFilters()
+    {
+        if (_set is null) return;
+        _filtered = _set.Cards
+            .Where(c => string.IsNullOrWhiteSpace(_search) ||
+                        c.Name.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                        c.LocalId.Contains(_search, StringComparison.OrdinalIgnoreCase))
+            .Where(c => _collectionFilter switch
+            {
+                "owned"   => _counts.GetValueOrDefault(c.Id) > 0,
+                "missing" => _counts.GetValueOrDefault(c.Id) == 0,
+                _         => true
+            })
+            .ToList();
+    }
+
+    private void SetFilter(string filter) { _collectionFilter = filter; ApplyFilters(); }
+
+    private List<(string Variant, int Count)> VariantChips(string cardId) =>
+        _variantCounts
+            .Where(kv => kv.Key.StartsWith(cardId + ":") && kv.Value > 0)
+            .Select(kv => (kv.Key.Split(':')[1], kv.Value))
+            .OrderBy(x => x.Item1)
+            .ToList();
+
+    private static string VariantShort(string variant) => variant switch
+    {
+        "Normal"       => "NRM",
+        "Reverse"      => "REV",
+        "Holo"         => "HOLO",
+        "FirstEdition" => "1st",
+        "WPromo"       => "PROMO",
+        _              => variant
+    };
+
+    private async Task SelectCardAsync(CardBrief card)
+    {
+        _selectedCard = card;
+        await _modal!.OpenAsync(card);
+    }
+
+    private async Task HandleModalClose()
+    {
+        _selectedCard = null;
+        await JS.InvokeVoidAsync("unlockScroll");
+    }
+
+    private async Task HandleCountChanged((string CardId, int NewTotal) update)
+    {
+        if (update.NewTotal == 0) _counts.Remove(update.CardId);
+        else _counts[update.CardId] = update.NewTotal;
+
+        var variantTotals = await Collection.GetCardVariantTotalsAsync(update.CardId);
+        var prefix = update.CardId + ":";
+        foreach (var key in _variantCounts.Keys.Where(k => k.StartsWith(prefix)).ToList())
+            _variantCounts.Remove(key);
+        foreach (var kv in variantTotals.Where(kv => kv.Value > 0))
+            _variantCounts[$"{update.CardId}:{kv.Key}"] = kv.Value;
+    }
+}

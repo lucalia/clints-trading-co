@@ -1,0 +1,32 @@
+@inherits LayoutComponentBase
+@inject IJSRuntime JS
+
+<div class="app-shell">
+    <header class="app-header">
+        <div class="header-content">
+            <div class="header-brand">
+                <img src="/img/logo.png" class="brand-logo" alt="Clint's Trading Co." />
+                <span class="brand-title">Clint's Trading Co.</span>
+            </div>
+            <nav class="header-nav">
+                <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">Sets</NavLink>
+                <NavLink class="nav-link" href="/locations">Locations</NavLink>
+                <a class="nav-link nav-signout" href="/logout">Sign out</a>
+            </nav>
+        </div>
+    </header>
+    <main class="app-main">
+        @Body
+    </main>
+    <footer class="app-footer">
+        Clint's Trading Co. &mdash; Card data via <a href="https://tcgdex.dev" target="_blank" rel="noopener">TCGDex</a>
+    </footer>
+</div>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await JS.InvokeVoidAsync("initScrollEffects");
+    }
+}

@@ -1,0 +1,336 @@
+@inject TcgDexService TcgDex
+@inject CollectionService Collection
+@inject LocationService LocationSvc
+@inject IJSRuntime JS
+
+@if (_card is not null)
+{
+    <div class="modal-overlay" @onclick="Close">
+        <div class="modal-panel" @onclick:stopPropagation="true">
+            <button class="modal-close" @onclick="Close">&#10005;</button>
+            @if (_detailLoading)
+            {
+                <div class="modal-loading">
+                    <div class="pokeball-spinner small"></div>
+                </div>
+            }
+            else
+            {
+                <div class="modal-body">
+                    <div class="modal-image-col">
+                        @{ var imgSrc = _detail?.Image ?? _card.Image; }
+                        @if (imgSrc is not null)
+                        {
+                            <img class="modal-card-image zoomable" src="@(imgSrc + "/high.webp")" alt="@(_detail?.Name ?? _card.Name)"
+                                 @onclick="() => _zoomed = true" title="Click to zoom" />
+                        }
+                        @if (_detail is not null)
+                        {
+                            <div class="pricing-block">
+                                <div class="pricing-title">Price (USD est.)</div>
+                                @if (_detail.Pricing?.Cardmarket is { } cm && (cm.Low ?? cm.Avg ?? cm.Trend) is not null)
+                                {
+                                    @if (cm.Low is not null)   { <div class="price-row"><span>Low</span><span>$@ToUsd(cm.Low.Value)</span></div> }
+                                    @if (cm.Avg is not null)   { <div class="price-row"><span>Avg</span><span>$@ToUsd(cm.Avg.Value)</span></div> }
+                                    @if (cm.Trend is not null) { <div class="price-row"><span>Trend</span><span>$@ToUsd(cm.Trend.Value)</span></div> }
+                                    <div class="price-note">Converted from Cardmarket EUR</div>
+                                }
+                                else
+                                {
+                                    <div class="price-unavailable">No pricing data available for this card</div>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <div class="modal-info-col">
+                        @if (_detail is null)
+                        {
+                            <h2 class="modal-card-name">@_card.Name</h2>
+                            <p class="effect-text" style="margin-top:.5rem;color:var(--text2)">Could not load card details.</p>
+                        }
+                        else
+                        {
+                            <div class="modal-card-header">
+                                <h2 class="modal-card-name">@_detail.Name</h2>
+                                @if (_detail.Hp is not null) { <span class="hp-badge">HP&nbsp;@_detail.Hp</span> }
+                            </div>
+
+                            <div class="modal-badges-row">
+                                @foreach (var type in _detail.Types ?? Enumerable.Empty<string>())
+                                {
+                                    <span class="type-badge" style="background:@TypeColor(type)">@type</span>
+                                }
+                                @if (_detail.TrainerType is not null) { <span class="meta-chip trainer">@_detail.TrainerType</span> }
+                                @if (_detail.Stage is not null)       { <span class="meta-chip">@_detail.Stage</span> }
+                                @if (_detail.Rarity is not null)      { <span class="meta-chip rarity">@_detail.Rarity</span> }
+                            </div>
+
+                            @if (_detail.Effect is not null)
+                            {
+                                <div class="section-label">Card Text</div>
+                                <div class="trainer-effect-block">@RenderEffectText(_detail.Effect)</div>
+                            }
+
+                            @if (_detail.Abilities?.Count > 0)
+                            {
+                                <div class="section-label">Abilities</div>
+                                @foreach (var ability in _detail.Abilities)
+                                {
+                                    <div class="ability-block">
+                                        <span class="ability-name">@ability.Name</span>
+                                        @if (ability.Type is not null) { <span class="ability-type-tag">@ability.Type</span> }
+                                        @if (ability.Effect is not null) { <p class="effect-text">@RenderEffectText(ability.Effect)</p> }
+                                    </div>
+                                }
+                            }
+
+                            @if (_detail.Attacks?.Count > 0)
+                            {
+                                <div class="section-label">Attacks</div>
+                                @foreach (var atk in _detail.Attacks)
+                                {
+                                    <div class="attack-block">
+                                        <div class="attack-header">
+                                            <div class="attack-cost">
+                                                @foreach (var cost in atk.Cost)
+                                                {
+                                                    @if (HasEnergyImage(cost))
+                                                    {
+                                                        <span class="energy-coin energy-@cost.ToLower()" title="@cost"></span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="energy-coin" style="background:@TypeColor(cost)" title="@cost">@TypeAbbr(cost)</span>
+                                                    }
+                                                }
+                                            </div>
+                                            <span class="attack-name">@atk.Name</span>
+                                            @if (!string.IsNullOrEmpty(atk.Damage))
+                                            {
+                                                <span class="attack-damage">@atk.Damage</span>
+                                            }
+                                        </div>
+                                        @if (atk.Effect is not null) { <p class="effect-text">@RenderEffectText(atk.Effect)</p> }
+                                    </div>
+                                }
+                            }
+
+                            <div class="modal-footer-meta">
+                                @if (_detail.Illustrator is not null)    { <span>Illus.&nbsp;@_detail.Illustrator</span> }
+                                @if (_detail.Retreat is not null)        { <span>Retreat:&nbsp;@_detail.Retreat</span> }
+                                @if (_detail.RegulationMark is not null) { <span>Reg.&nbsp;@_detail.RegulationMark</span> }
+                                <span>@_detail.Id</span>
+                            </div>
+                        }
+
+                        @{ var cardId = _detail?.Id ?? _card.Id; }
+                        <div class="collection-section">
+                            <div class="collection-section-top">
+                                <span class="section-label" style="border:none;padding:0">My Collection</span>
+                                <span class="collection-total">@_locationCounts.Values.Sum() total</span>
+                            </div>
+
+                            @{ var assignments = _locationCounts.Where(kv => kv.Value > 0).ToList(); }
+                            @if (assignments.Any())
+                            {
+                                <div class="loc-assignments">
+                                    @foreach (var kv in assignments)
+                                    {
+                                        var parts = kv.Key.Split(':');
+                                        var locId = int.Parse(parts[0]);
+                                        var variantLabel = parts[1];
+                                        var locLabel = locId == 0 ? "Unassigned" : (_locations.FirstOrDefault(l => l.Id == locId)?.Name ?? "?");
+                                        <div class="loc-assignment-row">
+                                            <span>@variantLabel &bull; @locLabel</span>
+                                            <span>@kv.Value</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            @if (AvailableVariants().Count > 1)
+                            {
+                                <div class="variant-selector">
+                                    @foreach (var v in AvailableVariants())
+                                    {
+                                        <button class="variant-btn @(_selectedVariant == v ? "active" : "")"
+                                                @onclick="() => SelectVariant(v)">@v</button>
+                                    }
+                                </div>
+                            }
+
+                            <div class="loc-select-row">
+                                <select class="loc-dropdown" @bind="_selectedLocationId" @bind:after="SyncInput">
+                                    <option value="0">Unassigned</option>
+                                    @foreach (var loc in _locations)
+                                    {
+                                        <option value="@loc.Id">@loc.Name</option>
+                                    }
+                                </select>
+                                <div class="counter-controls">
+                                    <button class="counter-btn"
+                                            @onclick="() => DoAdjust(cardId, -1)"
+                                            disabled="@(GetCount(_selectedLocationId, _selectedVariant) == 0)">&#8722;</button>
+                                    <input type="number" class="counter-input" min="0" step="1"
+                                           @bind="_countInput"
+                                           @bind:event="onchange"
+                                           @bind:after="() => ApplyCountInput(cardId)" />
+                                    <button class="counter-btn"
+                                            @onclick="() => DoAdjust(cardId, +1)">&#43;</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (_zoomed && (_detail?.Image ?? _card?.Image) is { } zoomSrc)
+    {
+        <div class="image-zoom-overlay" @onclick="() => _zoomed = false">
+            <img class="image-zoom-img" src="@(zoomSrc + "/high.webp")" alt="@(_detail?.Name ?? _card?.Name)" />
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public EventCallback<(string CardId, int NewTotal)> OnCountChanged { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private CardBrief? _card;
+    private CardDetail? _detail;
+    private bool _detailLoading;
+    private bool _zoomed;
+    private Dictionary<string, int> _locationCounts = new();
+    private List<Location> _locations = new();
+    private bool _locationsLoaded;
+    private int _selectedLocationId;
+    private string _selectedVariant = "Normal";
+    private int _countInput;
+
+    public async Task OpenAsync(CardBrief card)
+    {
+        await JS.InvokeVoidAsync("lockScroll");
+        _card = card;
+        _detail = null;
+        _locationCounts = new();
+        _detailLoading = true;
+        StateHasChanged();
+
+        var idx = card.Id.LastIndexOf('-');
+        var setId = idx > 0 ? card.Id[..idx] : card.Id;
+        try { _detail = await TcgDex.GetCardAsync(setId, card.LocalId); } catch { }
+        _locationCounts = await Collection.GetCardBreakdownAsync(card.Id);
+
+        if (!_locationsLoaded)
+        {
+            _locations = await LocationSvc.GetAllAsync();
+            _locationsLoaded = true;
+        }
+
+        var available = AvailableVariants();
+        if (!available.Contains(_selectedVariant)) _selectedVariant = available[0];
+        SyncInput();
+        _detailLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task Close()
+    {
+        _card = null;
+        _detail = null;
+        _zoomed = false;
+        await JS.InvokeVoidAsync("unlockScroll");
+        await OnClose.InvokeAsync();
+    }
+
+    private List<string> AvailableVariants()
+    {
+        if (_detail?.Variants is not { } v) return ["Normal"];
+        var list = new List<string>();
+        if (v.Normal)       list.Add("Normal");
+        if (v.Reverse)      list.Add("Reverse");
+        if (v.Holo)         list.Add("Holo");
+        if (v.FirstEdition) list.Add("FirstEdition");
+        if (v.WPromo)       list.Add("WPromo");
+        return list.Count > 0 ? list : ["Normal"];
+    }
+
+    private int GetCount(int locationId, string variant) =>
+        _locationCounts.GetValueOrDefault($"{locationId}:{variant}");
+
+    private void SyncInput() => _countInput = GetCount(_selectedLocationId, _selectedVariant);
+
+    private void SelectVariant(string v) { _selectedVariant = v; SyncInput(); }
+
+    private async Task DoAdjust(string cardId, int delta)
+    {
+        await AdjustCount(cardId, _selectedLocationId, _selectedVariant, delta);
+        SyncInput();
+    }
+
+    private async Task ApplyCountInput(string cardId)
+    {
+        var current = GetCount(_selectedLocationId, _selectedVariant);
+        var delta = _countInput - current;
+        if (delta != 0) await AdjustCount(cardId, _selectedLocationId, _selectedVariant, delta);
+        SyncInput();
+    }
+
+    private async Task AdjustCount(string cardId, int locationId, string variant, int delta)
+    {
+        var newTotal = await Collection.AdjustCountAsync(cardId, locationId, variant, delta);
+        var key = $"{locationId}:{variant}";
+        var newLocCount = Math.Max(0, _locationCounts.GetValueOrDefault(key) + delta);
+        if (newLocCount == 0) _locationCounts.Remove(key);
+        else _locationCounts[key] = newLocCount;
+        await OnCountChanged.InvokeAsync((cardId, newTotal));
+    }
+
+    private const decimal EurToUsd = 1.09m;
+    private static string ToUsd(decimal eur) => (eur * EurToUsd).ToString("F2");
+
+    private static MarkupString RenderEffectText(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return new MarkupString("");
+        var encoded = System.Net.WebUtility.HtmlEncode(text);
+        var result = Regex.Replace(encoded, @"\{([A-Z])\}", m => m.Groups[1].Value switch
+        {
+            "G" => "<span class=\"energy-coin energy-grass\" title=\"Grass\"></span>",
+            "R" => "<span class=\"energy-coin energy-fire\" title=\"Fire\"></span>",
+            "W" => "<span class=\"energy-coin energy-water\" title=\"Water\"></span>",
+            "L" => "<span class=\"energy-coin energy-lightning\" title=\"Lightning\"></span>",
+            "P" => "<span class=\"energy-coin energy-psychic\" title=\"Psychic\"></span>",
+            "F" => "<span class=\"energy-coin energy-fighting\" title=\"Fighting\"></span>",
+            "D" => "<span class=\"energy-coin energy-darkness\" title=\"Darkness\"></span>",
+            "M" => "<span class=\"energy-coin energy-metal\" title=\"Metal\"></span>",
+            "N" => "<span class=\"energy-coin\" style=\"background:#7038f8\" title=\"Dragon\">N</span>",
+            "Y" => "<span class=\"energy-coin\" style=\"background:#f5a2c8\" title=\"Fairy\">Y</span>",
+            "C" => "<span class=\"energy-coin\" style=\"background:#9ba7b0\" title=\"Colorless\">C</span>",
+            _   => m.Value
+        });
+        return new MarkupString(result);
+    }
+
+    private static bool HasEnergyImage(string type) => type is
+        "Grass" or "Fire" or "Water" or "Lightning" or "Psychic"
+        or "Fighting" or "Darkness" or "Metal";
+
+    private static string TypeAbbr(string type) => type switch
+    {
+        "Dragon"    => "N",
+        "Fairy"     => "Y",
+        "Colorless" => "C",
+        _           => "?"
+    };
+
+    private static string TypeColor(string type) => type switch
+    {
+        "Dragon"    => "#7038f8",
+        "Fairy"     => "#f5a2c8",
+        "Colorless" => "#9ba7b0",
+        _           => "#6b7280"
+    };
+}

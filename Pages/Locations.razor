@@ -1,0 +1,239 @@
+@page "/locations"
+@inject LocationService LocationSvc
+@inject CollectionService Collection
+@inject TcgDexService TcgDex
+
+<PageTitle>Locations &mdash; Clint's Card Shop</PageTitle>
+
+<div class="locations-page">
+    <h2 class="page-title">Storage Locations</h2>
+
+    <div class="add-location-form">
+        <h3 class="form-title">Add Location</h3>
+        <div class="form-row">
+            <input class="loc-input" type="text" placeholder="Name (e.g. Main Binder)"
+                   @bind="_newName" @bind:event="oninput" maxlength="60" />
+            <button class="btn-add" @onclick="AddLocationAsync"
+                    disabled="@(string.IsNullOrWhiteSpace(_newName))">
+                + Add
+            </button>
+        </div>
+        @if (_addError is not null)
+        {
+            <div class="form-error">@_addError</div>
+        }
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loc-loading">Loading&hellip;</div>
+    }
+    else if (_locations.Count == 0)
+    {
+        <div class="loc-empty">No locations yet. Add one above to get started.</div>
+    }
+    else
+    {
+        <div class="location-grid">
+            @foreach (var loc in _locations)
+            {
+                <div class="location-card">
+                    <div class="location-card-header">
+                        @if (_editingId == loc.Id)
+                        {
+                            <input class="loc-input inline" @bind="_editName" @bind:event="oninput" maxlength="60" />
+                        }
+                        else
+                        {
+                            <span class="location-name">@loc.Name</span>
+                            <button class="btn-expand @(_viewingId == loc.Id ? "expanded" : "")"
+                                    @onclick="() => ToggleViewCardsAsync(loc)"
+                                    title="@(_viewingId == loc.Id ? "Collapse" : "Browse cards")">&#9662;</button>
+                        }
+                    </div>
+                    <div class="location-card-footer">
+                        <span class="location-count">
+                            @(_cardCounts.GetValueOrDefault(loc.Id)) copies stored
+                        </span>
+                        <div class="location-actions">
+                            @if (_editingId == loc.Id)
+                            {
+                                <button class="btn-save" @onclick="() => SaveEditAsync(loc.Id)">Save</button>
+                                <button class="btn-cancel" @onclick="CancelEdit">Cancel</button>
+                            }
+                            else
+                            {
+                                <button class="btn-edit" @onclick="() => StartEdit(loc)">Edit</button>
+                                <button class="btn-delete" @onclick="() => DeleteAsync(loc.Id)">Delete</button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @if (_viewingId != -1)
+        {
+            var viewingLoc = _locations.FirstOrDefault(l => l.Id == _viewingId);
+            <div class="location-cards-panel">
+                <div class="location-cards-panel-header">
+                    <span class="location-cards-panel-title">
+                        Cards in <strong>@viewingLoc?.Name</strong>
+                    </span>
+                    <button class="btn-cancel" @onclick="CloseView">Close</button>
+                </div>
+                @if (_loadingCards)
+                {
+                    <div class="loc-loading">Loading&hellip;</div>
+                }
+                else if (_viewCardBriefs.Count == 0)
+                {
+                    <div class="loc-empty">No cards stored in this location.</div>
+                }
+                else
+                {
+                    <div class="location-cards-summary">
+                        @_viewCardBriefs.Count unique card@(_viewCardBriefs.Count == 1 ? "" : "s") &mdash; @_viewCards.Values.Sum() total @(_viewCards.Values.Sum() == 1 ? "copy" : "copies")
+                    </div>
+                    <div class="card-grid loc-card-grid">
+                        @foreach (var (card, count) in _viewCardBriefs)
+                        {
+                            <div class="card-tile" @onclick="() => _modal!.OpenAsync(card)">
+                                @if (card.Image is not null)
+                                {
+                                    <img class="card-image" src="@(card.Image + "/low.webp")" alt="@card.Name" loading="lazy"
+                                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+                                    <div class="card-image-placeholder" style="display:none">?</div>
+                                }
+                                else
+                                {
+                                    <div class="card-image-placeholder">?</div>
+                                }
+                                <div class="card-tile-footer">
+                                    <span class="card-tile-name">@card.Name</span>
+                                    <span class="card-tile-id">#@card.LocalId</span>
+                                </div>
+                                <div class="collection-badge">&#215;@count</div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+<CardDetailModal @ref="_modal" />
+
+@code {
+    private List<Location> _locations = new();
+    private Dictionary<int, int> _cardCounts = new();
+    private bool _loading = true;
+    private string _newName = "";
+    private string? _addError;
+    private int _editingId = -1;
+    private string _editName = "";
+    private int _viewingId = -1;
+    private Dictionary<string, int> _viewCards = new();
+    private List<(CardBrief Card, int Count)> _viewCardBriefs = new();
+    private bool _loadingCards;
+    private CardDetailModal? _modal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+        _loading = false;
+    }
+
+    private async Task RefreshAsync()
+    {
+        var locsTask   = LocationSvc.GetAllAsync();
+        var countsTask = LocationSvc.GetCardCountsPerLocationAsync();
+        await Task.WhenAll(locsTask, countsTask);
+        _locations  = locsTask.Result;
+        _cardCounts = countsTask.Result;
+    }
+
+    private async Task AddLocationAsync()
+    {
+        _addError = null;
+        if (string.IsNullOrWhiteSpace(_newName)) return;
+        if (_locations.Any(l => l.Name.Equals(_newName.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            _addError = "A location with that name already exists.";
+            return;
+        }
+        await LocationSvc.AddAsync(_newName);
+        _newName = "";
+        await RefreshAsync();
+    }
+
+    private void StartEdit(Location loc)
+    {
+        _editingId = loc.Id;
+        _editName  = loc.Name;
+    }
+
+    private async Task SaveEditAsync(int id)
+    {
+        if (string.IsNullOrWhiteSpace(_editName)) return;
+        await LocationSvc.UpdateAsync(id, _editName);
+        _editingId = -1;
+        await RefreshAsync();
+    }
+
+    private void CancelEdit() => _editingId = -1;
+
+    private async Task DeleteAsync(int id)
+    {
+        await LocationSvc.DeleteAsync(id);
+        if (_viewingId == id) CloseView();
+        await RefreshAsync();
+    }
+
+    private async Task ToggleViewCardsAsync(Location loc)
+    {
+        if (_viewingId == loc.Id) { CloseView(); return; }
+        _viewingId    = loc.Id;
+        _loadingCards = true;
+        StateHasChanged();
+
+        _viewCards = await Collection.GetCardsByLocationAsync(loc.Id);
+
+        if (_viewCards.Count > 0)
+        {
+            var setIds = _viewCards.Keys.Select(SetIdFromCardId).Distinct().ToArray();
+            var sets   = await Task.WhenAll(setIds.Select(sid => TcgDex.GetSetAsync(sid)));
+
+            var cardLookup = sets
+                .Where(s => s is not null)
+                .SelectMany(s => s!.Cards)
+                .GroupBy(c => c.Id)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            _viewCardBriefs = _viewCards
+                .Select(kv =>
+                {
+                    var idx = kv.Key.LastIndexOf('-');
+                    var fallback = new CardBrief { Id = kv.Key, Name = kv.Key, LocalId = idx > 0 ? kv.Key[(idx + 1)..] : kv.Key };
+                    return (Card: cardLookup.GetValueOrDefault(kv.Key) ?? fallback, Count: kv.Value);
+                })
+                .OrderBy(x => x.Card.Id)
+                .ToList();
+        }
+        else
+        {
+            _viewCardBriefs = new();
+        }
+
+        _loadingCards = false;
+    }
+
+    private void CloseView() { _viewingId = -1; _viewCards.Clear(); _viewCardBriefs.Clear(); }
+
+    private static string SetIdFromCardId(string cardId)
+    {
+        var idx = cardId.LastIndexOf('-');
+        return idx > 0 ? cardId[..idx] : cardId;
+    }
+}
