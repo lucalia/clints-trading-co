@@ -13,13 +13,6 @@ variables:
 
 steps:
 
-- task: UseDotNet@2
-  displayName: 'Install .NET 10 SDK'
-  inputs:
-    packageType: 'sdk'
-    version: '10.x'
-    includePreviewVersions: true
-
 - task: DotNetCoreCLI@2
   displayName: 'Restore'
   inputs:
@@ -38,7 +31,7 @@ steps:
   inputs:
     command: 'publish'
     publishWebProjects: true
-    arguments: '--configuration $(buildConfiguration) --runtime win-x86 --self-contained false --no-restore --output $(Build.ArtifactStagingDirectory)'
+    arguments: '--configuration $(buildConfiguration) --no-restore --output $(Build.ArtifactStagingDirectory)'
     zipAfterPublish: true
     modifyOutputPath: false
 
