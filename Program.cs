@@ -22,7 +22,11 @@ builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 builder.Services.AddHttpClient<TcgDexService>();
 
-var dbPath = Path.Combine(builder.Environment.ContentRootPath, "collection.db");
+// On Azure App Service, HOME points to D:\home which is always writable.
+// ContentRootPath (wwwroot) may be read-only when deployed as a zip package.
+var dbRoot = Environment.GetEnvironmentVariable("HOME") ?? builder.Environment.ContentRootPath;
+var dbPath = Path.Combine(dbRoot, "data", "collection.db");
+Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
 builder.Services.AddDbContextFactory<CollectionDbContext>(options =>
     options.UseSqlite($"Data Source={dbPath}"));
 
