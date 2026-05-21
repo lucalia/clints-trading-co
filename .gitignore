@@ -1,0 +1,27 @@
+# Build output
+bin/
+obj/
+
+# SQLite database (production data — NEVER commit)
+*.db
+*.db-shm
+*.db-wal
+
+# .NET user secrets and local config
+*.user
+appsettings.*.json
+!appsettings.json
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.suo
+*.user
+
+# Claude Code local settings (personal overrides)
+.claude/settings.local.json
+.claude/worktrees/
+
+# OS
+.DS_Store
+Thumbs.db

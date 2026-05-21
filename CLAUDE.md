@@ -27,12 +27,27 @@ Runs on http://localhost:5128 via `dotnet run`.
 ```sql
 CollectionEntries (CardId TEXT, LocationId INT, Variant TEXT, Count INT)
   PK: (CardId, LocationId, Variant)
-  LocationId=0 means "Unassigned"
+  LocationId=0 means "Collection" (the default catch-all location)
 
 Locations (Id INT AUTOINCREMENT, Name TEXT, Type TEXT)
   Types: Box, Tin, ETB, Binder, Display, Other
+
+CardLists (Id INT AUTOINCREMENT, Name TEXT, ShareToken TEXT UNIQUE, Type TEXT)
+  Type: "Standard" | "Wishlist"
+
+ListEntries (ListId INT, CardId TEXT, LocationId INT, Variant TEXT, Count INT)
+  PK: (ListId, CardId, LocationId, Variant)
 ```
-Schema changes require deleting `collection.db` — EnsureCreated() recreates it.
+
+## ⚠️ NEVER DELETE collection.db
+`collection.db` contains the user's real Pokémon card collection — production data.
+**Deleting it destroys data that cannot be recovered.**
+
+For schema changes, use additive SQL only:
+- New tables: `CREATE TABLE IF NOT EXISTS …`
+- New columns: `ALTER TABLE … ADD COLUMN …` (wrapped in try/catch — SQLite has no IF NOT EXISTS for ALTER)
+- Program.cs startup runs these safe migrations automatically after `EnsureCreated()`
+- Never drop tables, drop columns, or delete the file
 
 ## Critical gotchas
 - **Attack.Damage**: TCGDex returns this as a JSON number (`10`) OR string (`"80+"`). `NumberOrStringConverter` in `CardDetail.cs` handles both. Removing it breaks card detail loading for simple-damage attacks.

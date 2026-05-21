@@ -1,0 +1,53 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr: none
+
+pool:
+  vmImage: 'windows-latest'
+
+variables:
+  buildConfiguration: 'Release'
+
+steps:
+
+- task: UseDotNet@2
+  displayName: 'Install .NET 10 SDK'
+  inputs:
+    packageType: 'sdk'
+    version: '10.x'
+    includePreviewVersions: true
+
+- task: DotNetCoreCLI@2
+  displayName: 'Restore'
+  inputs:
+    command: 'restore'
+    projects: '**/*.csproj'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Build'
+  inputs:
+    command: 'build'
+    projects: '**/*.csproj'
+    arguments: '--configuration $(buildConfiguration) --no-restore'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Publish'
+  inputs:
+    command: 'publish'
+    publishWebProjects: true
+    arguments: '--configuration $(buildConfiguration) --runtime win-x86 --self-contained false --no-restore --output $(Build.ArtifactStagingDirectory)'
+    zipAfterPublish: true
+    modifyOutputPath: false
+
+- task: AzureRmWebAppDeployment@5
+  displayName: 'Deploy to Azure App Service'
+  inputs:
+    ConnectionType: 'AzureRM'
+    azureSubscription: 'Clint''s Trading Co(597c4045-d646-460d-a27a-81976123d67f)'
+    appType: 'webApp'
+    WebAppName: 'clints-trading-co'
+    packageForLinux: '$(Build.ArtifactStagingDirectory)/**/*.zip'
+    AppSettings: '-ASPNETCORE_ENVIRONMENT Production'
