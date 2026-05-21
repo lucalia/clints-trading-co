@@ -1,0 +1,106 @@
+<div class="card-grid-wrapper">
+    <div class="card-grid-toolbar">
+        <div class="view-toggle">
+            <button class="view-btn @(_view=="grid"?"active":"")" title="Grid view" @onclick='() => _view = "grid"'>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+            </button>
+            <button class="view-btn @(_view=="list"?"active":"")" title="List view" @onclick='() => _view = "list"'>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="2" width="14" height="2" rx="1"/><rect x="1" y="7" width="14" height="2" rx="1"/><rect x="1" y="12" width="14" height="2" rx="1"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <div class="card-grid @(_view == "list" ? "card-list" : "")">
+        @foreach (var card in Cards)
+        {
+            var chips = VariantChips?.Invoke(card.Id) ?? new();
+            var badge = CountBadge?.Invoke(card.Id) ?? 0;
+            <div class="card-tile @(SelectedCard?.Id == card.Id ? "selected" : "")"
+                 @onclick="() => OnCardClick.InvokeAsync(card)">
+                <div class="card-image-wrap">
+                    @if (card.Image is not null)
+                    {
+                        <img class="card-image"
+                             src="@(card.Image + "/low.webp")"
+                             alt="@card.Name"
+                             loading="lazy"
+                             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+                        <div class="card-image-placeholder" style="display:none">?</div>
+                    }
+                    else
+                    {
+                        <div class="card-image-placeholder">?</div>
+                    }
+                    @if (_view == "grid" && chips.Count > 0)
+                    {
+                        <div class="card-variant-overlay">
+                            @foreach (var (variant, count) in chips)
+                            {
+                                <span class="variant-chip">@VariantShort(variant) &#215;@count</span>
+                            }
+                        </div>
+                    }
+                    @if (_view == "grid" && badge > 0)
+                    {
+                        <div class="collection-badge">&#215;@badge</div>
+                    }
+                </div>
+                <div class="card-tile-footer">
+                    <span class="card-tile-name">@card.Name</span>
+                    @if (_view == "grid" && PurchaseCoverage is not null)
+                    {
+                        var (linked, owned) = PurchaseCoverage.Invoke(card.Id);
+                        @if (owned > 0 && linked > 0)
+                        {
+                            <span class="purchase-cov-chip @(linked >= owned ? "full" : "partial")">
+                                @(linked >= owned ? "✓" : $"{linked}/{owned}") purchased
+                            </span>
+                        }
+                    }
+                    @if (_view == "list" && chips.Count > 0)
+                    {
+                        <div class="card-tile-chips">
+                            @foreach (var (variant, count) in chips)
+                            {
+                                <span class="variant-chip">@VariantShort(variant) &#215;@count</span>
+                            }
+                        </div>
+                    }
+                    @if (_view == "list" && badge > 0)
+                    {
+                        <span class="variant-chip">&#215;@badge</span>
+                    }
+                    <span class="card-tile-id">#@card.LocalId</span>
+                    @if (_view == "list" && OnRemove.HasDelegate)
+                    {
+                        <button class="card-remove-btn" title="Remove from list"
+                                @onclick:stopPropagation="true"
+                                @onclick="() => OnRemove.InvokeAsync(card)">&#10005;</button>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<CardBrief> Cards { get; set; } = Array.Empty<CardBrief>();
+    [Parameter] public Func<string, List<(string Variant, int Count)>>? VariantChips { get; set; }
+    [Parameter] public Func<string, int>? CountBadge { get; set; }
+    [Parameter] public CardBrief? SelectedCard { get; set; }
+    [Parameter] public EventCallback<CardBrief> OnCardClick { get; set; }
+    [Parameter] public EventCallback<CardBrief> OnRemove { get; set; }
+    [Parameter] public Func<string, (int Linked, int Owned)>? PurchaseCoverage { get; set; }
+
+    private string _view = "grid";
+
+    private static string VariantShort(string variant) => variant switch
+    {
+        "Normal"       => "NRM",
+        "Reverse"      => "REV",
+        "Holo"         => "HOLO",
+        "FirstEdition" => "1st",
+        "WPromo"       => "PROMO",
+        _              => variant
+    };
+}

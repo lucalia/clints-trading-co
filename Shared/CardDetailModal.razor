@@ -1,6 +1,8 @@
 @inject TcgDexService TcgDex
 @inject CollectionService Collection
 @inject LocationService LocationSvc
+@inject CardListService ListSvc
+@inject PurchaseService PurchaseSvc
 @inject IJSRuntime JS
 
 @if (_card is not null)
@@ -44,10 +46,11 @@
                     </div>
 
                     <div class="modal-info-col">
+                        @{ var cardId = _detail?.Id ?? _card.Id; }
+
                         @if (_detail is null)
                         {
                             <h2 class="modal-card-name">@_card.Name</h2>
-                            <p class="effect-text" style="margin-top:.5rem;color:var(--text2)">Could not load card details.</p>
                         }
                         else
                         {
@@ -55,132 +58,371 @@
                                 <h2 class="modal-card-name">@_detail.Name</h2>
                                 @if (_detail.Hp is not null) { <span class="hp-badge">HP&nbsp;@_detail.Hp</span> }
                             </div>
+                        }
 
-                            <div class="modal-badges-row">
-                                @foreach (var type in _detail.Types ?? Enumerable.Empty<string>())
-                                {
-                                    <span class="type-badge" style="background:@TypeColor(type)">@type</span>
-                                }
-                                @if (_detail.TrainerType is not null) { <span class="meta-chip trainer">@_detail.TrainerType</span> }
-                                @if (_detail.Stage is not null)       { <span class="meta-chip">@_detail.Stage</span> }
-                                @if (_detail.Rarity is not null)      { <span class="meta-chip rarity">@_detail.Rarity</span> }
-                            </div>
-
-                            @if (_detail.Effect is not null)
-                            {
-                                <div class="section-label">Card Text</div>
-                                <div class="trainer-effect-block">@RenderEffectText(_detail.Effect)</div>
-                            }
-
-                            @if (_detail.Abilities?.Count > 0)
-                            {
-                                <div class="section-label">Abilities</div>
-                                @foreach (var ability in _detail.Abilities)
-                                {
-                                    <div class="ability-block">
-                                        <span class="ability-name">@ability.Name</span>
-                                        @if (ability.Type is not null) { <span class="ability-type-tag">@ability.Type</span> }
-                                        @if (ability.Effect is not null) { <p class="effect-text">@RenderEffectText(ability.Effect)</p> }
-                                    </div>
-                                }
-                            }
-
-                            @if (_detail.Attacks?.Count > 0)
-                            {
-                                <div class="section-label">Attacks</div>
-                                @foreach (var atk in _detail.Attacks)
-                                {
-                                    <div class="attack-block">
-                                        <div class="attack-header">
-                                            <div class="attack-cost">
-                                                @foreach (var cost in atk.Cost)
-                                                {
-                                                    @if (HasEnergyImage(cost))
-                                                    {
-                                                        <span class="energy-coin energy-@cost.ToLower()" title="@cost"></span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="energy-coin" style="background:@TypeColor(cost)" title="@cost">@TypeAbbr(cost)</span>
-                                                    }
-                                                }
-                                            </div>
-                                            <span class="attack-name">@atk.Name</span>
-                                            @if (!string.IsNullOrEmpty(atk.Damage))
-                                            {
-                                                <span class="attack-damage">@atk.Damage</span>
-                                            }
-                                        </div>
-                                        @if (atk.Effect is not null) { <p class="effect-text">@RenderEffectText(atk.Effect)</p> }
-                                    </div>
-                                }
-                            }
-
-                            <div class="modal-footer-meta">
-                                @if (_detail.Illustrator is not null)    { <span>Illus.&nbsp;@_detail.Illustrator</span> }
-                                @if (_detail.Retreat is not null)        { <span>Retreat:&nbsp;@_detail.Retreat</span> }
-                                @if (_detail.RegulationMark is not null) { <span>Reg.&nbsp;@_detail.RegulationMark</span> }
-                                <span>@_detail.Id</span>
+                        @if (!ReadOnly)
+                        {
+                            <div class="modal-tabs">
+                                <button class="modal-tab @(_tab=="info"?"active":"")"       @onclick='() => SetTab("info")'>Info</button>
+                                <button class="modal-tab @(_tab=="collection"?"active":"")" @onclick='() => SetTab("collection")'>Collection</button>
+                                <button class="modal-tab @(_tab=="lists"?"active":"")"      @onclick='() => SetTab("lists")'>Lists</button>
+                                <button class="modal-tab @(_tab=="purchases"?"active":"")"  @onclick='() => SetTab("purchases")'>Purchases</button>
                             </div>
                         }
 
-                        @{ var cardId = _detail?.Id ?? _card.Id; }
-                        <div class="collection-section">
-                            <div class="collection-section-top">
-                                <span class="section-label" style="border:none;padding:0">My Collection</span>
-                                <span class="collection-total">@_locationCounts.Values.Sum() total</span>
-                            </div>
-
-                            @{ var assignments = _locationCounts.Where(kv => kv.Value > 0).ToList(); }
-                            @if (assignments.Any())
+                        @if (_tab == "info" || ReadOnly)
+                        {
+                            @if (_detail is not null)
                             {
-                                <div class="loc-assignments">
-                                    @foreach (var kv in assignments)
+                                <div class="modal-badges-row">
+                                    @foreach (var type in _detail.Types ?? Enumerable.Empty<string>())
                                     {
-                                        var parts = kv.Key.Split(':');
-                                        var locId = int.Parse(parts[0]);
-                                        var variantLabel = parts[1];
-                                        var locLabel = locId == 0 ? "Unassigned" : (_locations.FirstOrDefault(l => l.Id == locId)?.Name ?? "?");
-                                        <div class="loc-assignment-row">
-                                            <span>@variantLabel &bull; @locLabel</span>
-                                            <span>@kv.Value</span>
+                                        <span class="type-badge" style="background:@TypeColor(type)">@type</span>
+                                    }
+                                    @if (_detail.TrainerType is not null) { <span class="meta-chip trainer">@_detail.TrainerType</span> }
+                                    @if (_detail.Stage is not null)       { <span class="meta-chip">@_detail.Stage</span> }
+                                    @if (_detail.Rarity is not null)      { <span class="meta-chip rarity">@_detail.Rarity</span> }
+                                </div>
+
+                                @if (_detail.Effect is not null)
+                                {
+                                    <div class="section-label">Card Text</div>
+                                    <div class="trainer-effect-block">@RenderEffectText(_detail.Effect)</div>
+                                }
+
+                                @if (_detail.Abilities?.Count > 0)
+                                {
+                                    <div class="section-label">Abilities</div>
+                                    @foreach (var ability in _detail.Abilities)
+                                    {
+                                        <div class="ability-block">
+                                            <span class="ability-name">@ability.Name</span>
+                                            @if (ability.Type is not null) { <span class="ability-type-tag">@ability.Type</span> }
+                                            @if (ability.Effect is not null) { <p class="effect-text">@RenderEffectText(ability.Effect)</p> }
                                         </div>
                                     }
+                                }
+
+                                @if (_detail.Attacks?.Count > 0)
+                                {
+                                    <div class="section-label">Attacks</div>
+                                    @foreach (var atk in _detail.Attacks)
+                                    {
+                                        <div class="attack-block">
+                                            <div class="attack-header">
+                                                <div class="attack-cost">
+                                                    @foreach (var cost in atk.Cost)
+                                                    {
+                                                        @if (HasEnergyImage(cost))
+                                                        {
+                                                            <span class="energy-coin energy-@cost.ToLower()" title="@cost"></span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="energy-coin" style="background:@TypeColor(cost)" title="@cost">@TypeAbbr(cost)</span>
+                                                        }
+                                                    }
+                                                </div>
+                                                <span class="attack-name">@atk.Name</span>
+                                                @if (!string.IsNullOrEmpty(atk.Damage))
+                                                {
+                                                    <span class="attack-damage">@atk.Damage</span>
+                                                }
+                                            </div>
+                                            @if (atk.Effect is not null) { <p class="effect-text">@RenderEffectText(atk.Effect)</p> }
+                                        </div>
+                                    }
+                                }
+
+                                <div class="modal-footer-meta">
+                                    @if (_detail.Illustrator is not null)    { <span>Illus.&nbsp;@_detail.Illustrator</span> }
+                                    @if (_detail.Retreat is not null)        { <span>Retreat:&nbsp;@_detail.Retreat</span> }
+                                    @if (_detail.RegulationMark is not null) { <span>Reg.&nbsp;@_detail.RegulationMark</span> }
+                                    <span>@_detail.Id</span>
                                 </div>
                             }
-
-                            @if (AvailableVariants().Count > 1)
+                            else
                             {
-                                <div class="variant-selector">
-                                    @foreach (var v in AvailableVariants())
-                                    {
-                                        <button class="variant-btn @(_selectedVariant == v ? "active" : "")"
-                                                @onclick="() => SelectVariant(v)">@v</button>
-                                    }
-                                </div>
+                                <p class="effect-text" style="margin-top:.5rem;color:var(--text2)">Could not load card details.</p>
                             }
+                        }
 
-                            <div class="loc-select-row">
-                                <select class="loc-dropdown" @bind="_selectedLocationId" @bind:after="SyncInput">
-                                    <option value="0">Unassigned</option>
-                                    @foreach (var loc in _locations)
-                                    {
-                                        <option value="@loc.Id">@loc.Name</option>
-                                    }
-                                </select>
-                                <div class="counter-controls">
-                                    <button class="counter-btn"
-                                            @onclick="() => DoAdjust(cardId, -1)"
-                                            disabled="@(GetCount(_selectedLocationId, _selectedVariant) == 0)">&#8722;</button>
-                                    <input type="number" class="counter-input" min="0" step="1"
-                                           @bind="_countInput"
-                                           @bind:event="onchange"
-                                           @bind:after="() => ApplyCountInput(cardId)" />
-                                    <button class="counter-btn"
-                                            @onclick="() => DoAdjust(cardId, +1)">&#43;</button>
+                        @if (_tab == "collection" && !ReadOnly)
+                        {
+                            <div class="collection-section">
+                                <div class="collection-section-top">
+                                    <span class="section-label" style="border:none;padding:0">My Collection</span>
+                                    <span class="collection-total">@_locationCounts.Values.Sum() total</span>
+                                </div>
+
+                                @{ var assignments = _locationCounts.Where(kv => kv.Value > 0).ToList(); }
+                                @if (assignments.Any())
+                                {
+                                    <div class="loc-assignments">
+                                        @foreach (var kv in assignments)
+                                        {
+                                            var parts       = kv.Key.Split(':');
+                                            var locId       = int.Parse(parts[0]);
+                                            var variantLbl  = parts[1];
+                                            var locLbl      = locId == 0 ? "Collection" : (_locations.FirstOrDefault(l => l.Id == locId)?.Name ?? "?");
+                                            var isMoving    = _movingKey == kv.Key;
+
+                                            <div class="loc-assignment-row">
+                                                <span>@variantLbl &bull; @locLbl</span>
+                                                <span class="loc-row-right">
+                                                    <span>@kv.Value</span>
+                                                    <button class="btn-move @(isMoving ? "active" : "")"
+                                                            title="Move copies"
+                                                            @onclick="() => ToggleMove(kv.Key, kv.Value)">
+                                                        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+                                                            <path d="M9 4l4 4-4 4M13 8H3"/>
+                                                        </svg>
+                                                    </button>
+                                                </span>
+                                            </div>
+                                            @if (isMoving)
+                                            {
+                                                <div class="move-inline-form">
+                                                    <input type="number" class="loc-input" style="width:60px" min="1" max="@kv.Value"
+                                                           @bind="_moveCount" />
+                                                    <span class="move-inline-label">to</span>
+                                                    <select class="loc-select" @bind="_moveDestId">
+                                                        @if (locId != 0)
+                                                        {
+                                                            <option value="0">Collection</option>
+                                                        }
+                                                        @foreach (var loc in _locations.Where(l => l.Id != locId))
+                                                        {
+                                                            <option value="@loc.Id">@loc.Name</option>
+                                                        }
+                                                    </select>
+                                                    <button class="btn-add" style="padding:.3rem .65rem;font-size:.8rem"
+                                                            @onclick="() => ExecuteMoveAsync(cardId, variantLbl, locId)">Move</button>
+                                                    <button class="btn-cancel" @onclick="() => _movingKey = null">Cancel</button>
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                }
+
+                                @if (AvailableVariants().Count > 1)
+                                {
+                                    <div class="variant-selector">
+                                        @foreach (var v in AvailableVariants())
+                                        {
+                                            <button class="variant-btn @(_selectedVariant == v ? "active" : "")"
+                                                    @onclick="() => SelectVariant(v)">@v</button>
+                                        }
+                                    </div>
+                                }
+
+                                <div class="loc-select-row">
+                                    <select class="loc-dropdown" @bind="_selectedLocationId" @bind:after="SyncInput">
+                                        <option value="0">Collection</option>
+                                        @foreach (var loc in _locations)
+                                        {
+                                            <option value="@loc.Id">@loc.Name</option>
+                                        }
+                                    </select>
+                                    <div class="counter-controls">
+                                        <button class="counter-btn"
+                                                @onclick="() => DoAdjust(cardId, -1)"
+                                                disabled="@(GetCount(_selectedLocationId, _selectedVariant) == 0)">&#8722;</button>
+                                        <input type="number" class="counter-input" min="0" step="1"
+                                               @bind="_countInput"
+                                               @bind:event="onchange"
+                                               @bind:after="() => ApplyCountInput(cardId)" />
+                                        <button class="counter-btn"
+                                                @onclick="() => DoAdjust(cardId, +1)">&#43;</button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        }
+
+                        @if (_tab == "lists" && !ReadOnly)
+                        {
+                            <div class="collection-section">
+                                <div class="section-label" style="border:none;padding:0;margin-bottom:.6rem">In My Lists</div>
+                                @if (!_listsLoaded)
+                                {
+                                    <div class="loc-loading" style="padding:.75rem 0">Loading&hellip;</div>
+                                }
+                                else if (_cardLists.Count == 0)
+                                {
+                                    <div class="loc-empty" style="padding:.75rem 0;text-align:left">Not in any lists yet.</div>
+                                }
+                                else
+                                {
+                                    <div class="loc-assignments">
+                                        @foreach (var (list, chips) in _cardLists)
+                                        {
+                                            <div class="loc-assignment-row">
+                                                <div style="display:flex;align-items:center;gap:.4rem;min-width:0">
+                                                    <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@list.Name</span>
+                                                    @if (list.Type == "Wishlist") { <span class="list-type-badge">Wishlist</span> }
+                                                </div>
+                                                <div class="card-tile-chips">
+                                                    @foreach (var (v, c) in chips)
+                                                    {
+                                                        <span class="variant-chip">@VariantShort(v) &#215;@c</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        @if (_tab == "purchases" && !ReadOnly)
+                        {
+                            <div class="collection-section">
+                                <div class="collection-section-top" style="margin-bottom:.5rem">
+                                    <span class="section-label" style="border:none;padding:0">Purchase History</span>
+                                    <a href="/purchases" style="font-size:.75rem;color:var(--accent)">View all ↗</a>
+                                </div>
+                                @if (_purchasesLoaded)
+                                {
+                                    var totalOwned  = _locationCounts.Values.Sum();
+                                    var totalLinked = _cardPurchases.Sum(x => x.Quantity);
+                                    @if (totalOwned > 0)
+                                    {
+                                        <div style="margin-bottom:.5rem">
+                                            @if (totalLinked >= totalOwned)
+                                            {
+                                                <span class="reconcile-badge reconcile-ok">&#10003; All @totalOwned copies accounted for</span>
+                                            }
+                                            else if (totalLinked > 0)
+                                            {
+                                                <span class="reconcile-badge reconcile-partial">@totalLinked / @totalOwned copies linked (@(totalOwned - totalLinked) unlinked)</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="reconcile-badge reconcile-none">@totalOwned copies — no purchase record</span>
+                                            }
+                                        </div>
+                                    }
+                                }
+                                @if (!_purchasesLoaded)
+                                {
+                                    <div class="loc-loading" style="padding:.75rem 0">Loading&hellip;</div>
+                                }
+                                else
+                                {
+                                    @if (_cardPurchases.Count > 0)
+                                    {
+                                        <div class="loc-assignments">
+                                            @foreach (var (purchase, locId, variant, qty) in _cardPurchases)
+                                            {
+                                                var perCard  = purchase.Quantity > 0 ? purchase.TotalCost / purchase.Quantity : 0;
+                                                var thisCost = perCard * qty;
+                                                var locName  = locId == 0 ? "Collection" : (_locations.FirstOrDefault(l => l.Id == locId)?.Name ?? "?");
+                                                <div class="loc-assignment-row" style="align-items:flex-start">
+                                                    <div style="min-width:0;flex:1">
+                                                        <div style="font-weight:600;font-size:.82rem">
+                                                            @purchase.PurchasedAt.ToString("MMM d, yyyy") &mdash; @purchase.Source
+                                                        </div>
+                                                        <div style="font-size:.75rem;color:var(--text2)">@purchase.Description</div>
+                                                        <div style="font-size:.72rem;color:var(--accent2);margin-top:.1rem">
+                                                            $@thisCost.ToString("F3") total &bull; $@perCard.ToString("F3") lot avg
+                                                        </div>
+                                                        <div style="font-size:.7rem;color:var(--text2)">Location: @locName</div>
+                                                    </div>
+                                                    <div style="display:flex;align-items:center;gap:.3rem;flex-shrink:0">
+                                                        <span class="variant-chip">@VariantShort(variant) &#215;@qty</span>
+                                                        @if (!string.IsNullOrWhiteSpace(purchase.ReceiptUrl))
+                                                        {
+                                                            <a href="@purchase.ReceiptUrl" target="_blank" rel="noopener"
+                                                               class="purchase-receipt-link" style="font-size:.72rem">↗</a>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="loc-empty" style="padding:.5rem 0;text-align:left;font-size:.82rem">Not linked to any purchase yet.</div>
+                                    }
+
+                                    @if (!_showLinkForm)
+                                    {
+                                        <button class="btn-edit" style="margin-top:.5rem;width:100%"
+                                                @onclick="OpenLinkForm">
+                                            + Link to a Purchase
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <div style="margin-top:.6rem;display:flex;flex-direction:column;gap:.5rem">
+                                            <div class="section-label" style="padding:.2rem 0 0;border:none">Select Purchase</div>
+                                            <div class="set-pick-list" style="max-height:180px">
+                                                @foreach (var p in _allPurchases)
+                                                {
+                                                    var remaining = p.Quantity - _purchaseLinkedQty.GetValueOrDefault(p.Id, 0);
+                                                    var isSelected = _linkPurchaseId == p.Id;
+                                                    <button class="set-pick-item @(isSelected ? "active" : "")"
+                                                            style="@(isSelected ? "border-color:var(--accent)" : "")"
+                                                            @onclick="() => { _linkPurchaseId = p.Id; _linkError = null; }"
+                                                            disabled="@(remaining <= 0 && !isSelected)">
+                                                        <div style="flex:1;text-align:left">
+                                                            <div style="font-weight:600">@p.Description</div>
+                                                            <div style="font-size:.72rem;color:var(--text2)">@p.PurchasedAt.ToString("MMM d, yyyy") &bull; @p.Source &bull; @remaining slots remaining</div>
+                                                        </div>
+                                                        @if (remaining <= 0) { <span class="reconcile-badge reconcile-ok" style="margin-left:auto">Full</span> }
+                                                    </button>
+                                                }
+                                            </div>
+                                            @if (_linkPurchaseId > 0)
+                                            {
+                                                var selPurchase = _allPurchases.FirstOrDefault(p => p.Id == _linkPurchaseId);
+                                                <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
+                                                    <label class="configure-label">
+                                                        Variant
+                                                        <select class="loc-select" @bind="_linkVariant">
+                                                            @foreach (var v in AvailableVariants())
+                                                            {
+                                                                <option value="@v">@(v == "FirstEdition" ? "1st Edition" : v)</option>
+                                                            }
+                                                        </select>
+                                                    </label>
+                                                    <label class="configure-label">
+                                                        Location
+                                                        <select class="loc-select" @bind="_linkLocationId">
+                                                            <option value="0">Collection</option>
+                                                            @foreach (var loc in _locations)
+                                                            {
+                                                                <option value="@loc.Id">@loc.Name</option>
+                                                            }
+                                                        </select>
+                                                    </label>
+                                                    <label class="configure-label">
+                                                        Qty
+                                                        <input class="loc-input" style="width:70px" type="number" min="1"
+                                                               max="@ModalMaxLinkQty" @bind="_linkQty" />
+                                                    </label>
+                                                    @if (selPurchase is not null)
+                                                    {
+                                                        var perCard = selPurchase.Quantity > 0 ? selPurchase.TotalCost / selPurchase.Quantity : 0;
+                                                        <div class="configure-label">
+                                                            Cost
+                                                            <span class="purchase-per-card">$@((perCard * _linkQty).ToString("F3"))</span>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                            @if (_linkError is not null) { <div class="form-error">@_linkError</div> }
+                                            <div style="display:flex;gap:.4rem">
+                                                <button class="btn-add" style="flex:1"
+                                                        disabled="@(_linkPurchaseId <= 0)"
+                                                        @onclick="SubmitLinkFromModalAsync">Link</button>
+                                                <button class="btn-cancel" @onclick="() => { _showLinkForm = false; _linkError = null; }">Cancel</button>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        }
                     </div>
                 </div>
             }
@@ -198,6 +440,7 @@
 @code {
     [Parameter] public EventCallback<(string CardId, int NewTotal)> OnCountChanged { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
 
     private CardBrief? _card;
     private CardDetail? _detail;
@@ -209,24 +452,54 @@
     private int _selectedLocationId;
     private string _selectedVariant = "Normal";
     private int _countInput;
+    private string _tab = "collection";
 
-    public async Task OpenAsync(CardBrief card)
+    // Move state
+    private string? _movingKey;
+    private int _moveCount = 1;
+    private int _moveDestId;
+
+    // Lists tab
+    private List<(CardList List, List<(string Variant, int Count)> Chips)> _cardLists = new();
+    private bool _listsLoaded;
+    private List<(Purchase P, int LocationId, string Variant, int Quantity)> _cardPurchases = new();
+    private bool _purchasesLoaded;
+    private List<Purchase> _allPurchases = new();
+    private Dictionary<int, int> _purchaseLinkedQty = new();
+    private bool _showLinkForm;
+    private int _linkPurchaseId;
+    private int _linkLocationId;
+    private string _linkVariant = "Normal";
+    private int _linkQty = 1;
+    private string? _linkError;
+
+    public async Task OpenAsync(CardBrief card, string? defaultTab = null)
     {
         await JS.InvokeVoidAsync("lockScroll");
-        _card = card;
-        _detail = null;
+        _card           = card;
+        _detail         = null;
         _locationCounts = new();
-        _detailLoading = true;
+        _detailLoading  = true;
+        _movingKey      = null;
+        _listsLoaded    = false;
+        _cardLists      .Clear();
+        _purchasesLoaded = false;
+        _cardPurchases  .Clear();
+        _showLinkForm   = false;
+        _linkError      = null;
+        _linkPurchaseId = 0;
+        _tab            = ReadOnly ? "info" : (defaultTab ?? "collection");
         StateHasChanged();
 
-        var idx = card.Id.LastIndexOf('-');
+        var idx   = card.Id.LastIndexOf('-');
         var setId = idx > 0 ? card.Id[..idx] : card.Id;
         try { _detail = await TcgDex.GetCardAsync(setId, card.LocalId); } catch { }
-        _locationCounts = await Collection.GetCardBreakdownAsync(card.Id);
+        if (!ReadOnly)
+            _locationCounts = await Collection.GetCardBreakdownAsync(card.Id);
 
-        if (!_locationsLoaded)
+        if (!_locationsLoaded && !ReadOnly)
         {
-            _locations = await LocationSvc.GetAllAsync();
+            _locations     = await LocationSvc.GetAllAsync();
             _locationsLoaded = true;
         }
 
@@ -237,11 +510,89 @@
         StateHasChanged();
     }
 
+    private async Task SetTab(string tab)
+    {
+        _tab       = tab;
+        _movingKey = null;
+        if (tab == "lists"     && !_listsLoaded)     await LoadListsAsync();
+        if (tab == "purchases" && !_purchasesLoaded)
+        {
+            if (!_locationsLoaded && !ReadOnly) { _locations = await LocationSvc.GetAllAsync(); _locationsLoaded = true; }
+            await LoadPurchasesAsync();
+        }
+    }
+
+    private async Task LoadListsAsync()
+    {
+        if (_card is null) return;
+        var cardId    = _detail?.Id ?? _card.Id;
+        var allLists  = await ListSvc.GetAllAsync();
+        var listData  = await ListSvc.GetListVariantCountsByCardAsync(cardId);
+        _cardLists    = allLists
+            .Where(l => listData.ContainsKey(l.Id))
+            .Select(l =>
+            {
+                var chips = listData[l.Id]
+                    .Select(kv => (kv.Key, kv.Value))
+                    .OrderBy(x => x.Item1)
+                    .ToList();
+                return (List: l, Chips: chips);
+            })
+            .ToList();
+        _listsLoaded = true;
+    }
+
+    private async Task LoadPurchasesAsync()
+    {
+        if (_card is null) return;
+        var cardId = _detail?.Id ?? _card.Id;
+        var byCardTask  = PurchaseSvc.GetPurchasesByCardAsync(cardId);
+        var allTask     = PurchaseSvc.GetAllAsync();
+        var linkedTask  = PurchaseSvc.GetLinkedQuantityPerPurchaseAsync();
+        await Task.WhenAll(byCardTask, allTask, linkedTask);
+        _cardPurchases      = byCardTask.Result;
+        _allPurchases       = allTask.Result;
+        _purchaseLinkedQty  = linkedTask.Result;
+        _purchasesLoaded    = true;
+    }
+
+    private int ModalMaxLinkQty
+    {
+        get
+        {
+            var p = _allPurchases.FirstOrDefault(x => x.Id == _linkPurchaseId);
+            if (p is null || _card is null) return 999;
+            var cardId   = _detail?.Id ?? _card.Id;
+            var total    = _purchaseLinkedQty.GetValueOrDefault(_linkPurchaseId, 0);
+            var existing = _cardPurchases.Where(x => x.P.Id == _linkPurchaseId && x.Variant == _linkVariant).Sum(x => x.Quantity);
+            return Math.Max(0, p.Quantity - (total - existing));
+        }
+    }
+
+    private void OpenLinkForm()
+    {
+        _showLinkForm = true;
+        _linkVariant  = AvailableVariants().FirstOrDefault() ?? "Normal";
+    }
+
+    private async Task SubmitLinkFromModalAsync()
+    {
+        if (_linkPurchaseId <= 0 || _card is null) { _linkError = "Select a purchase first."; return; }
+        if (_linkQty > ModalMaxLinkQty) { _linkError = $"Only {ModalMaxLinkQty} slot{(ModalMaxLinkQty == 1 ? "" : "s")} remaining."; return; }
+        var cardId = _detail?.Id ?? _card.Id;
+        await PurchaseSvc.SetPurchaseCardAsync(_linkPurchaseId, cardId, _linkLocationId, _linkVariant, _linkQty);
+        _showLinkForm   = false;
+        _linkError      = null;
+        _purchasesLoaded = false;
+        await LoadPurchasesAsync();
+    }
+
     private async Task Close()
     {
-        _card = null;
-        _detail = null;
-        _zoomed = false;
+        _card      = null;
+        _detail    = null;
+        _zoomed    = false;
+        _movingKey = null;
         await JS.InvokeVoidAsync("unlockScroll");
         await OnClose.InvokeAsync();
     }
@@ -274,7 +625,7 @@
     private async Task ApplyCountInput(string cardId)
     {
         var current = GetCount(_selectedLocationId, _selectedVariant);
-        var delta = _countInput - current;
+        var delta   = _countInput - current;
         if (delta != 0) await AdjustCount(cardId, _selectedLocationId, _selectedVariant, delta);
         SyncInput();
     }
@@ -282,12 +633,45 @@
     private async Task AdjustCount(string cardId, int locationId, string variant, int delta)
     {
         var newTotal = await Collection.AdjustCountAsync(cardId, locationId, variant, delta);
-        var key = $"{locationId}:{variant}";
-        var newLocCount = Math.Max(0, _locationCounts.GetValueOrDefault(key) + delta);
-        if (newLocCount == 0) _locationCounts.Remove(key);
-        else _locationCounts[key] = newLocCount;
+        var key      = $"{locationId}:{variant}";
+        var newLoc   = Math.Max(0, _locationCounts.GetValueOrDefault(key) + delta);
+        if (newLoc == 0) _locationCounts.Remove(key);
+        else _locationCounts[key] = newLoc;
         await OnCountChanged.InvokeAsync((cardId, newTotal));
     }
+
+    // ── Move ──────────────────────────────────────────────────────────────
+
+    private void ToggleMove(string key, int currentCount)
+    {
+        if (_movingKey == key) { _movingKey = null; return; }
+        _movingKey  = key;
+        _moveCount  = Math.Min(1, currentCount);
+        var srcLocId = int.Parse(key.Split(':')[0]);
+        _moveDestId  = srcLocId == 0
+            ? (_locations.FirstOrDefault()?.Id ?? 0)
+            : 0;
+    }
+
+    private async Task ExecuteMoveAsync(string cardId, string variant, int fromLocId)
+    {
+        if (_moveCount <= 0 || _moveDestId == fromLocId) return;
+        await Collection.MoveCardCountAsync(cardId, variant, fromLocId, _moveDestId, _moveCount);
+        _locationCounts = await Collection.GetCardBreakdownAsync(cardId);
+        _movingKey      = null;
+        SyncInput();
+        await OnCountChanged.InvokeAsync((cardId, _locationCounts.Values.Sum()));
+    }
+
+    private static string VariantShort(string v) => v switch
+    {
+        "Normal"       => "NRM",
+        "Reverse"      => "REV",
+        "Holo"         => "HOLO",
+        "FirstEdition" => "1st",
+        "WPromo"       => "PROMO",
+        _              => v
+    };
 
     private const decimal EurToUsd = 1.09m;
     private static string ToUsd(decimal eur) => (eur * EurToUsd).ToString("F2");
@@ -296,7 +680,7 @@
     {
         if (string.IsNullOrEmpty(text)) return new MarkupString("");
         var encoded = System.Net.WebUtility.HtmlEncode(text);
-        var result = Regex.Replace(encoded, @"\{([A-Z])\}", m => m.Groups[1].Value switch
+        var result  = Regex.Replace(encoded, @"\{([A-Z])\}", m => m.Groups[1].Value switch
         {
             "G" => "<span class=\"energy-coin energy-grass\" title=\"Grass\"></span>",
             "R" => "<span class=\"energy-coin energy-fire\" title=\"Fire\"></span>",

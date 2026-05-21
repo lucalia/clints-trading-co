@@ -32,3 +32,14 @@ window.lockScroll = function () {
 window.unlockScroll = function () {
     document.body.style.overflow = '';
 };
+
+window.copyToClipboard = function (text) {
+    navigator.clipboard.writeText(text).catch(() => {
+        const el = document.createElement('textarea');
+        el.value = text;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+    });
+};
