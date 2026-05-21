@@ -1,0 +1,491 @@
+@page "/purchases/{Id:int}"
+@attribute [Authorize]
+@inject PurchaseService PurchaseSvc
+@inject TcgDexService TcgDex
+@inject LocationService LocationSvc
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>@(_purchase?.Description ?? "Purchase") &mdash; Clint's Trading Co.</PageTitle>
+
+@if (_loading)
+{
+    <div class="loading-screen"><div class="pokeball-spinner"></div><p>Loading&hellip;</p></div>
+}
+else if (_purchase is null)
+{
+    <div class="error-banner"><strong>Purchase not found.</strong></div>
+}
+else
+{
+    <div class="locations-page">
+        <div class="list-detail-header">
+            <a href="/purchases" class="set-back-btn" title="All Purchases">&#8592;</a>
+            <h2 class="page-title" style="margin:0">@_purchase.Description</h2>
+            <span class="purchase-type-badge purchase-type-@_purchase.Type.ToLower().Replace(" ","")">@_purchase.Type</span>
+            @{
+                var linked     = _purchaseVariantCounts.Values.Sum();
+                var reconciled = linked >= _purchase.Quantity;
+                var hasAny     = linked > 0;
+            }
+            @if (reconciled)
+            {
+                <span class="reconcile-badge reconcile-ok">&#10003; Reconciled</span>
+            }
+            else if (hasAny)
+            {
+                <span class="reconcile-badge reconcile-partial">@linked / @_purchase.Quantity linked</span>
+            }
+            else
+            {
+                <span class="reconcile-badge reconcile-none">Unreconciled — @_purchase.Quantity cards to link</span>
+            }
+        </div>
+
+        <div class="purchase-card" style="margin-bottom:1.25rem">
+            @if (_editingPurchase)
+            {
+                <div class="purchase-form">
+                    <div class="purchase-form-row">
+                        <label class="configure-label" style="flex:1">Date <input class="loc-input" type="date" @bind="_editCopy!.PurchasedAt" @bind:format="yyyy-MM-dd" /></label>
+                        <label class="configure-label" style="flex:2">Source <input class="loc-input" type="text" @bind="_editCopy!.Source" maxlength="100" /></label>
+                        <label class="configure-label">Type
+                            <select class="loc-select" @bind="_editCopy!.Type">
+                                <option value="Lot">Lot</option><option value="Pack">Booster Pack</option>
+                                <option value="Single">Single</option><option value="Bundle">Bundle</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="purchase-form-row">
+                        <label class="configure-label" style="flex:1">Description <input class="loc-input" type="text" @bind="_editCopy!.Description" maxlength="200" /></label>
+                    </div>
+                    <div class="purchase-form-row">
+                        <label class="configure-label">Total Cost <input class="loc-input" type="number" min="0" step="0.01" style="width:110px" @bind="_editCopy!.TotalCost" /></label>
+                        <label class="configure-label">Qty <input class="loc-input" type="number" min="1" style="width:90px" @bind="_editCopy!.Quantity" /></label>
+                    </div>
+                    <div class="purchase-form-row">
+                        <label class="configure-label" style="flex:1">Receipt URL <input class="loc-input" type="url" @bind="_editCopy!.ReceiptUrl" maxlength="500" /></label>
+                    </div>
+                    <div class="purchase-form-row">
+                        <label class="configure-label" style="flex:1">Notes <textarea class="loc-input" rows="2" @bind="_editCopy!.Notes" maxlength="500"></textarea></label>
+                    </div>
+                    <div style="display:flex;gap:.5rem;margin-top:.25rem">
+                        <button class="btn-save" @onclick="SavePurchaseEditAsync">Save</button>
+                        <button class="btn-cancel" @onclick="() => _editingPurchase = false">Cancel</button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="purchase-card-body">
+                    <div class="purchase-numbers">
+                        <span>@_purchase.PurchasedAt.ToString("MMMM d, yyyy")</span>
+                        <span>&bull;</span>
+                        <span>@_purchase.Source</span>
+                        <span>&bull;</span>
+                        <span>Total: <strong>$@_purchase.TotalCost.ToString("F2")</strong></span>
+                        <span>Cards: <strong>@_purchase.Quantity.ToString("N0")</strong></span>
+                        <span>Per card: <strong>$@(_purchase.Quantity > 0 ? (_purchase.TotalCost / _purchase.Quantity).ToString("F3") : "—")</strong></span>
+                        @if (!string.IsNullOrWhiteSpace(_purchase.ReceiptUrl))
+                        {
+                            <a href="@_purchase.ReceiptUrl" target="_blank" rel="noopener" class="purchase-receipt-link">View Receipt ↗</a>
+                        }
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(_purchase.Notes))
+                    {
+                        <div class="purchase-notes">@_purchase.Notes</div>
+                    }
+                </div>
+                <div style="margin-top:.6rem">
+                    <button class="btn-edit" @onclick="() => { _editingPurchase = true; _editCopy = Copy(_purchase); }">Edit Details</button>
+                </div>
+            }
+        </div>
+
+        <div class="location-cards-panel">
+            <div class="location-cards-panel-header">
+                <span class="location-cards-panel-title">
+                    Linked Cards
+                    @if (_purchase.Quantity > 0)
+                    {
+                        var remaining = _purchase.Quantity - linked;
+                        <span style="color:var(--text2);font-size:.8rem;margin-left:.5rem">
+                            (@linked / @_purchase.Quantity linked@(remaining > 0 ? $", {remaining} remaining" : ""))
+                        </span>
+                    }
+                </span>
+                <div class="panel-actions">
+                    @if (_addStep == AddStep.Hidden && linked < _purchase.Quantity)
+                    {
+                        <button class="btn-add" style="padding:.3rem .75rem;font-size:.8rem"
+                                @onclick="OpenAddCardAsync">+ Link Card</button>
+                    }
+                </div>
+            </div>
+
+            @if (_addStep != AddStep.Hidden)
+            {
+                <div class="add-card-panel">
+                    @if (_addStep == AddStep.SetSearch)
+                    {
+                        <div class="step-header">
+                            <span class="step-title">Pick a Set</span>
+                            <button class="btn-cancel" @onclick="CloseAddPanel">Cancel</button>
+                        </div>
+                        <input class="loc-input add-card-search" type="text" placeholder="Search sets&hellip;"
+                               @bind="_setSearch" @bind:event="oninput" />
+                        @if (_setsLoading)
+                        {
+                            <div class="loc-loading" style="padding:1rem 0">Loading sets&hellip;</div>
+                        }
+                        else
+                        {
+                            var fSets = FilteredSets.ToList();
+                            <div class="set-pick-list">
+                                @foreach (var set in fSets)
+                                {
+                                    <button class="set-pick-item" @onclick="() => SelectSetAsync(set)">
+                                        @if (set.Logo is not null) { <img class="set-pick-logo" src="@(set.Logo + ".webp")" alt="" onerror="this.style.display='none'" /> }
+                                        <span>@set.Name</span>
+                                    </button>
+                                }
+                                @if (fSets.Count == 0) { <div class="loc-empty" style="padding:.75rem 0">No sets match.</div> }
+                            </div>
+                        }
+                    }
+                    else if (_addStep == AddStep.CardPick)
+                    {
+                        <div class="step-header">
+                            <button class="btn-cancel" @onclick="() => { _addStep = AddStep.SetSearch; _addSuccessMsg = null; }">&#8592; Back</button>
+                            <span class="step-title">@_addSetBrief?.Name</span>
+                            <button class="btn-cancel" @onclick="CloseAddPanel">Done</button>
+                        </div>
+                        @if (_addSuccessMsg is not null) { <div class="add-success">@_addSuccessMsg</div> }
+                        <input class="loc-input add-card-search" type="text" placeholder="Search cards&hellip;"
+                               @bind="_addCardFilter" @bind:event="oninput" />
+                        @if (_loadingCards)
+                        {
+                            <div class="loc-loading" style="padding:1rem 0">Loading&hellip;</div>
+                        }
+                        else
+                        {
+                            <CardGrid Cards="FilteredAddCards"
+                                      VariantChips="GetPurchaseChips"
+                                      SelectedCard="_addCard"
+                                      OnCardClick="PickCard" />
+                        }
+                    }
+                    else if (_addStep == AddStep.Configure)
+                    {
+                        <div class="step-header">
+                            <button class="btn-cancel" @onclick="() => { _addStep = AddStep.CardPick; _addConfigError = null; }">&#8592; Back</button>
+                            <span class="step-title">Link Card</span>
+                            <button class="btn-cancel" @onclick="CloseAddPanel">Cancel</button>
+                        </div>
+                        <div class="configure-form">
+                            <div class="configure-card-preview">
+                                @if (_addCard!.Image is not null) { <img src="@(_addCard.Image + "/low.webp")" alt="@_addCard.Name" class="configure-card-img" /> }
+                                <div>
+                                    <div class="configure-card-name">@_addCard.Name</div>
+                                    <div class="card-tile-id">#@_addCard.LocalId</div>
+                                </div>
+                            </div>
+                            <div class="configure-fields">
+                                <label class="configure-label">
+                                    Variant
+                                    <select class="loc-select" @bind="_addVariant" @bind:after="StateHasChanged"
+                                            disabled="@(_addCardDetail is null)">
+                                        @if (_addCardDetail is null)
+                                        {
+                                            <option value="Normal">Loading&hellip;</option>
+                                        }
+                                        else
+                                        {
+                                            @foreach (var v in AddCardVariants())
+                                            {
+                                                <option value="@v">@VariantLabel(v)</option>
+                                            }
+                                        }
+                                    </select>
+                                </label>
+                                <label class="configure-label">
+                                    Location (where this copy lives)
+                                    <select class="loc-select" @bind="_addLocationId">
+                                        <option value="0">Collection</option>
+                                        @foreach (var loc in _locations)
+                                        {
+                                            <option value="@loc.Id">@loc.Name</option>
+                                        }
+                                    </select>
+                                </label>
+                                <label class="configure-label">
+                                    Quantity
+                                    <input class="loc-input" style="width:80px" type="number" min="0" max="@MaxLinkQty"
+                                           @bind="_addQty" />
+                                </label>
+                                <div class="configure-label">
+                                    Remaining
+                                    <span class="purchase-per-card" style="color:@(MaxLinkQty == 0 ? "var(--red)" : "var(--accent2)")">
+                                        @MaxLinkQty slots
+                                    </span>
+                                </div>
+                            </div>
+                            @if (_addConfigError is not null) { <div class="form-error">@_addConfigError</div> }
+                            <div class="configure-actions">
+                                <button class="btn-add" @onclick="SubmitLinkAsync"
+                                        disabled="@(MaxLinkQty == 0 && _purchaseVariantCounts.GetValueOrDefault($"{_addCard?.Id}:{_addVariant}") == 0)">
+                                    Link to Purchase
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (_loadingCards && _addStep == AddStep.Hidden)
+            {
+                <div class="loc-loading">Loading&hellip;</div>
+            }
+            else if (_linkedCardBriefs.Count == 0 && _addStep == AddStep.Hidden)
+            {
+                <div class="loc-empty">No cards linked yet. Click <strong>+ Link Card</strong> to get started.</div>
+            }
+            else if (_linkedCardBriefs.Count > 0)
+            {
+                <div class="location-cards-summary">
+                    @_linkedCardBriefs.Count unique card@(_linkedCardBriefs.Count == 1 ? "" : "s")
+                </div>
+                <CardGrid Cards="@(_linkedCardBriefs.Select(x => x.Card).ToList())"
+                          VariantChips="GetPurchaseChips"
+                          OnCardClick="SelectCardAsync"
+                          OnRemove="UnlinkCardAsync" />
+            }
+        </div>
+    </div>
+}
+
+<CardDetailModal @ref="_modal" OnClose="HandleModalClose" />
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Purchase? _purchase;
+    private bool _loading = true;
+    private bool _editingPurchase;
+    private Purchase? _editCopy;
+    private Dictionary<string, int> _purchaseVariantCounts = new();
+    private List<(CardBrief Card, int Count)> _linkedCardBriefs = new();
+    private bool _loadingCards;
+    private List<Location> _locations = new();
+    private CardBrief? _selectedCard;
+    private CardDetailModal? _modal;
+
+    private enum AddStep { Hidden, SetSearch, CardPick, Configure }
+    private AddStep _addStep = AddStep.Hidden;
+    private List<SetBrief> _allSets = new();
+    private string _setSearch = "";
+    private bool _setsLoaded;
+    private bool _setsLoading;
+    private SetBrief? _addSetBrief;
+    private List<CardBrief> _addSetCards = new();
+    private string _addCardFilter = "";
+    private string? _addSuccessMsg;
+    private CardBrief? _addCard;
+    private string _addVariant = "Normal";
+    private int _addLocationId;
+    private int _addQty = 1;
+    private string? _addConfigError;
+    private CardDetail? _addCardDetail;
+
+    private int MaxLinkQty
+    {
+        get
+        {
+            if (_purchase is null || _addCard is null) return 0;
+            var totalLinked   = _purchaseVariantCounts.Values.Sum();
+            var existingEntry = _purchaseVariantCounts.GetValueOrDefault($"{_addCard.Id}:{_addVariant}", 0);
+            return Math.Max(0, _purchase.Quantity - (totalLinked - existingEntry));
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var pTask   = PurchaseSvc.GetAllAsync();
+        var locTask = LocationSvc.GetAllAsync();
+        await Task.WhenAll(pTask, locTask);
+        _purchase  = pTask.Result.FirstOrDefault(p => p.Id == Id);
+        _locations = locTask.Result;
+        if (_purchase is not null)
+        {
+            _loadingCards = true;
+            StateHasChanged();
+            await ReloadLinkedCardsAsync();
+            _loadingCards = false;
+        }
+        _loading = false;
+    }
+
+    private async Task ReloadLinkedCardsAsync()
+    {
+        _purchaseVariantCounts = await PurchaseSvc.GetVariantCountsByPurchaseAsync(Id);
+        var cardIds = _purchaseVariantCounts.Keys.Select(k => k.Split(':')[0]).Distinct().ToHashSet();
+        if (cardIds.Count == 0) { _linkedCardBriefs = new(); return; }
+        var setIds = cardIds.Select(id => { var i = id.LastIndexOf('-'); return i > 0 ? id[..i] : id; }).Distinct().ToArray();
+        var sets   = await Task.WhenAll(setIds.Select(s => TcgDex.GetSetAsync(s)));
+        var lookup = sets.Where(s => s is not null).SelectMany(s => s!.Cards).GroupBy(c => c.Id).ToDictionary(g => g.Key, g => g.First());
+        _linkedCardBriefs = cardIds.Select(id =>
+        {
+            var idx  = id.LastIndexOf('-');
+            var fb   = new CardBrief { Id = id, Name = id, LocalId = idx > 0 ? id[(idx + 1)..] : id };
+            var card  = lookup.GetValueOrDefault(id) ?? fb;
+            var count = _purchaseVariantCounts.Where(kv => kv.Key.StartsWith(id + ":")).Sum(kv => kv.Value);
+            return (Card: card, Count: count);
+        }).OrderBy(x => x.Card.Id).ToList();
+    }
+
+    private List<(string Variant, int Count)> GetPurchaseChips(string cardId) =>
+        _purchaseVariantCounts
+            .Where(kv => kv.Key.StartsWith(cardId + ":") && kv.Value > 0)
+            .Select(kv => (kv.Key.Split(':')[1], kv.Value))
+            .OrderBy(x => x.Item1).ToList();
+
+    private async Task UnlinkCardAsync(CardBrief card)
+    {
+        await PurchaseSvc.RemovePurchaseCardAsync(Id, card.Id);
+        await ReloadLinkedCardsAsync();
+    }
+
+    private async Task OpenAddCardAsync()
+    {
+        _addStep = AddStep.SetSearch;
+        _addSuccessMsg = null;
+        if (_setsLoaded) return;
+        _setsLoading = true;
+        StateHasChanged();
+        _allSets    = await TcgDex.GetSetsAsync();
+        _setsLoaded = true;
+        _setsLoading = false;
+    }
+
+    private IEnumerable<SetBrief> FilteredSets =>
+        _allSets
+            .Where(s => !IsTcgpSet(s))
+            .Where(s => string.IsNullOrWhiteSpace(_setSearch) ||
+                        s.Name.Contains(_setSearch, StringComparison.OrdinalIgnoreCase))
+            .Reverse().Take(40);
+
+    private static bool IsTcgpSet(SetBrief s)
+    {
+        if (s.Logo is null) return s.Id.Length > 0 && char.IsUpper(s.Id[0]);
+        var parts = s.Logo.Split('/');
+        var en = Array.IndexOf(parts, "en");
+        return en >= 0 && en + 1 < parts.Length && parts[en + 1] == "tcgp";
+    }
+
+    private async Task SelectSetAsync(SetBrief set)
+    {
+        _addSetBrief   = set;
+        _addStep       = AddStep.CardPick;
+        _loadingCards  = true;
+        _addCardFilter = "";
+        _addCard       = null;
+        _addSuccessMsg = null;
+        StateHasChanged();
+        var full     = await TcgDex.GetSetAsync(set.Id);
+        _addSetCards = full?.Cards.ToList() ?? new();
+        _loadingCards = false;
+    }
+
+    private List<CardBrief> FilteredAddCards =>
+        string.IsNullOrWhiteSpace(_addCardFilter)
+            ? _addSetCards
+            : _addSetCards.Where(c => c.Name.Contains(_addCardFilter, StringComparison.OrdinalIgnoreCase) ||
+                                      c.LocalId.Contains(_addCardFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    private async Task PickCard(CardBrief card)
+    {
+        _addCard        = card;
+        _addVariant     = "Normal";
+        _addLocationId  = 0;
+        _addQty         = Math.Min(1, MaxLinkQty > 0 ? MaxLinkQty : 1);
+        _addConfigError = null;
+        _addCardDetail  = null;
+        _addStep        = AddStep.Configure;
+        StateHasChanged();
+        var idx   = card.Id.LastIndexOf('-');
+        var setId = idx > 0 ? card.Id[..idx] : card.Id;
+        try { _addCardDetail = await TcgDex.GetCardAsync(setId, card.LocalId); } catch { }
+        _addVariant = AddCardVariants().FirstOrDefault() ?? "Normal";
+    }
+
+    private List<string> AddCardVariants()
+    {
+        if (_addCardDetail?.Variants is not { } v) return ["Normal"];
+        var list = new List<string>();
+        if (v.Normal)       list.Add("Normal");
+        if (v.Reverse)      list.Add("Reverse");
+        if (v.Holo)         list.Add("Holo");
+        if (v.FirstEdition) list.Add("FirstEdition");
+        if (v.WPromo)       list.Add("WPromo");
+        return list.Count > 0 ? list : ["Normal"];
+    }
+
+    private static string VariantLabel(string v) => v == "FirstEdition" ? "1st Edition" : v;
+
+    private async Task SubmitLinkAsync()
+    {
+        if (_addCard is null) return;
+        if (_addQty < 0) { _addConfigError = "Quantity cannot be negative."; return; }
+        if (_addQty > MaxLinkQty && _purchaseVariantCounts.GetValueOrDefault($"{_addCard.Id}:{_addVariant}", 0) == 0)
+        {
+            _addConfigError = $"Only {MaxLinkQty} slot{(MaxLinkQty == 1 ? "" : "s")} remaining.";
+            return;
+        }
+        _addConfigError = null;
+        await PurchaseSvc.SetPurchaseCardAsync(Id, _addCard.Id, _addLocationId, _addVariant, _addQty);
+        _addSuccessMsg = $"{_addCard.Name} ({_addVariant}) linked!";
+        await ReloadLinkedCardsAsync();
+        _addStep = AddStep.CardPick;
+    }
+
+    private async Task SelectCardAsync(CardBrief card)
+    {
+        _selectedCard = card;
+        await _modal!.OpenAsync(card);
+    }
+
+    private async Task HandleModalClose()
+    {
+        _selectedCard = null;
+        await JS.InvokeVoidAsync("unlockScroll");
+    }
+
+    private async Task SavePurchaseEditAsync()
+    {
+        if (_editCopy is null) return;
+        await PurchaseSvc.UpdateAsync(_editCopy);
+        _purchase      = _editCopy;
+        _editingPurchase = false;
+    }
+
+    private static Purchase Copy(Purchase p) => new()
+    {
+        Id = p.Id, PurchasedAt = p.PurchasedAt, Source = p.Source, Description = p.Description,
+        TotalCost = p.TotalCost, Quantity = p.Quantity, Type = p.Type,
+        ReceiptUrl = p.ReceiptUrl, Notes = p.Notes
+    };
+
+    private void CloseAddPanel()
+    {
+        _addStep       = AddStep.Hidden;
+        _addCard       = null;
+        _addSetBrief   = null;
+        _addSetCards   .Clear();
+        _addCardFilter = "";
+        _setSearch     = "";
+        _addConfigError = null;
+        _addSuccessMsg  = null;
+        _addCardDetail  = null;
+    }
+}

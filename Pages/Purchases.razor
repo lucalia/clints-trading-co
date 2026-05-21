@@ -1,0 +1,243 @@
+@page "/purchases"
+@attribute [Authorize]
+@inject PurchaseService PurchaseSvc
+
+<PageTitle>Purchases &mdash; Clint's Trading Co.</PageTitle>
+
+<div class="locations-page">
+    <h2 class="page-title">Purchase History</h2>
+
+    @if (_purchases.Count > 0)
+    {
+        var totalCards    = _purchases.Sum(p => p.Quantity);
+        var totalSpent    = _purchases.Sum(p => p.TotalCost);
+        var avg           = totalCards > 0 ? totalSpent / totalCards : 0;
+        var totalLinked   = _linkedQty.Values.Sum();
+        var totalUnlinked = totalCards - totalLinked;
+        <div class="purchase-summary-bar">
+            <div class="purchase-stat">
+                <span class="purchase-stat-value">@_purchases.Count</span>
+                <span class="purchase-stat-label">Purchases</span>
+            </div>
+            <div class="purchase-stat">
+                <span class="purchase-stat-value">$@totalSpent.ToString("F2")</span>
+                <span class="purchase-stat-label">Total Spent</span>
+            </div>
+            <div class="purchase-stat">
+                <span class="purchase-stat-value">@totalCards.ToString("N0")</span>
+                <span class="purchase-stat-label">Cards Acquired</span>
+            </div>
+            <div class="purchase-stat">
+                <span class="purchase-stat-value" style="color:@(totalUnlinked > 0 ? "var(--red)" : "var(--accent2)")">
+                    @totalUnlinked.ToString("N0")
+                </span>
+                <span class="purchase-stat-label">Unprocessed</span>
+            </div>
+            <div class="purchase-stat">
+                <span class="purchase-stat-value">$@avg.ToString("F3")</span>
+                <span class="purchase-stat-label">Avg Per Card</span>
+            </div>
+        </div>
+    }
+
+    <div class="add-location-form">
+        <button class="btn-add" style="width:100%;justify-content:center"
+                @onclick="() => _showAddForm = !_showAddForm">
+            @(_showAddForm ? "− Cancel" : "+ Log Purchase")
+        </button>
+        @if (_showAddForm)
+        {
+            <div class="purchase-form">
+                <div class="purchase-form-row">
+                    <label class="configure-label" style="flex:1">
+                        Date
+                        <input class="loc-input" type="date" @bind="_new.PurchasedAt" @bind:format="yyyy-MM-dd" />
+                    </label>
+                    <label class="configure-label" style="flex:2">
+                        Source
+                        <input class="loc-input" type="text" placeholder="e.g. eBay, Walgreens" @bind="_new.Source" maxlength="100" />
+                    </label>
+                    <label class="configure-label">
+                        Type
+                        <select class="loc-select" @bind="_new.Type">
+                            <option value="Lot">Lot</option>
+                            <option value="Pack">Booster Pack</option>
+                            <option value="Single">Single</option>
+                            <option value="Bundle">Bundle</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="purchase-form-row">
+                    <label class="configure-label" style="flex:1">
+                        Description
+                        <input class="loc-input" type="text" placeholder="e.g. 1300-card bulk lot, Base Set booster" @bind="_new.Description" maxlength="200" />
+                    </label>
+                </div>
+                <div class="purchase-form-row">
+                    <label class="configure-label">
+                        Total Cost ($)
+                        <input class="loc-input" type="number" min="0" step="0.01" style="width:110px" @bind="_new.TotalCost" />
+                    </label>
+                    <label class="configure-label">
+                        Card Qty
+                        <input class="loc-input" type="number" min="1" style="width:90px" @bind="_new.Quantity" />
+                    </label>
+                    <div class="configure-label">
+                        Per Card
+                        <span class="purchase-per-card">
+                            @(_new.Quantity > 0 ? $"${(_new.TotalCost / _new.Quantity):F3}" : "—")
+                        </span>
+                    </div>
+                </div>
+                <div class="purchase-form-row">
+                    <label class="configure-label" style="flex:1">
+                        Receipt / Listing URL (optional)
+                        <input class="loc-input" type="url" placeholder="https://…" @bind="_new.ReceiptUrl" maxlength="500" />
+                    </label>
+                </div>
+                <div class="purchase-form-row">
+                    <label class="configure-label" style="flex:1">
+                        Notes (optional)
+                        <textarea class="loc-input" rows="2" @bind="_new.Notes" maxlength="500"></textarea>
+                    </label>
+                </div>
+                @if (_addError is not null) { <div class="form-error">@_addError</div> }
+                <button class="btn-add"
+                        disabled="@(string.IsNullOrWhiteSpace(_new.Description) || string.IsNullOrWhiteSpace(_new.Source))"
+                        @onclick="AddPurchaseAsync">
+                    Save Purchase
+                </button>
+            </div>
+        }
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loc-loading">Loading&hellip;</div>
+    }
+    else if (_purchases.Count == 0)
+    {
+        <div class="loc-empty">No purchases recorded yet. Log one above.</div>
+    }
+    else
+    {
+        <div class="location-grid">
+            @foreach (var p in _purchases)
+            {
+                var linked     = _linkedQty.GetValueOrDefault(p.Id);
+                var reconciled = linked >= p.Quantity;
+                var hasAny     = linked > 0;
+                <div class="location-card">
+                    <div class="location-card-header">
+                        @if (_editingId == p.Id)
+                        {
+                            <input class="loc-input inline" @bind="_editName" @bind:event="oninput" maxlength="200" />
+                        }
+                        else
+                        {
+                            <a href="/purchases/@p.Id" class="list-name-link">@p.Description</a>
+                        }
+                    </div>
+                    <div style="font-size:.75rem;color:var(--text2);margin:.1rem 0 .4rem;display:flex;gap:.4rem;flex-wrap:wrap;align-items:center">
+                        <span>@p.PurchasedAt.ToString("MMM d, yyyy")</span>
+                        <span>&bull;</span>
+                        <span>@p.Source</span>
+                        <span class="purchase-type-badge purchase-type-@p.Type.ToLower().Replace(" ","")">@p.Type</span>
+                    </div>
+                    <div class="location-card-footer">
+                        <span class="location-count">$@p.TotalCost.ToString("F2") &bull; @p.Quantity.ToString("N0") cards</span>
+                        <div style="display:flex;gap:.4rem;align-items:center">
+                            @if (reconciled)
+                            {
+                                <span class="reconcile-badge reconcile-ok">&#10003; Reconciled</span>
+                            }
+                            else if (hasAny)
+                            {
+                                <span class="reconcile-badge reconcile-partial">@linked / @p.Quantity linked</span>
+                            }
+                            else
+                            {
+                                <span class="reconcile-badge reconcile-none">Unreconciled</span>
+                            }
+                            @if (_editingId == p.Id)
+                            {
+                                <button class="btn-save" @onclick="() => SaveEditAsync(p)">Save</button>
+                                <button class="btn-cancel" @onclick="CancelEdit">Cancel</button>
+                            }
+                            else
+                            {
+                                <button class="btn-edit" @onclick="() => StartEdit(p)">Edit</button>
+                                <button class="btn-delete" @onclick="() => DeleteAsync(p.Id)">Delete</button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<Purchase> _purchases = new();
+    private Dictionary<int, int> _linkedQty = new();
+    private bool _loading = true;
+    private bool _showAddForm;
+    private string? _addError;
+    private Purchase _new = NewBlank();
+    private int _editingId = -1;
+    private string _editName = "";
+    private Purchase? _editCopy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+        _loading = false;
+    }
+
+    private async Task RefreshAsync()
+    {
+        var pTask = PurchaseSvc.GetAllAsync();
+        var qTask = PurchaseSvc.GetLinkedQuantityPerPurchaseAsync();
+        await Task.WhenAll(pTask, qTask);
+        _purchases = pTask.Result;
+        _linkedQty = qTask.Result;
+    }
+
+    private async Task AddPurchaseAsync()
+    {
+        _addError = null;
+        if (string.IsNullOrWhiteSpace(_new.Source) || string.IsNullOrWhiteSpace(_new.Description)) return;
+        if (_new.Quantity < 1) _new.Quantity = 1;
+        await PurchaseSvc.AddAsync(_new);
+        _new = NewBlank();
+        _showAddForm = false;
+        await RefreshAsync();
+    }
+
+    private void StartEdit(Purchase p)
+    {
+        _editingId = p.Id;
+        _editName  = p.Description;
+        _editCopy  = new Purchase { Id = p.Id, PurchasedAt = p.PurchasedAt, Source = p.Source, Description = p.Description, TotalCost = p.TotalCost, Quantity = p.Quantity, Type = p.Type, ReceiptUrl = p.ReceiptUrl, Notes = p.Notes };
+    }
+
+    private async Task SaveEditAsync(Purchase p)
+    {
+        if (_editCopy is null) return;
+        _editCopy.Description = _editName;
+        await PurchaseSvc.UpdateAsync(_editCopy);
+        _editingId = -1;
+        await RefreshAsync();
+    }
+
+    private void CancelEdit() => _editingId = -1;
+
+    private async Task DeleteAsync(int id)
+    {
+        await PurchaseSvc.DeleteAsync(id);
+        await RefreshAsync();
+    }
+
+    private static Purchase NewBlank() => new() { PurchasedAt = DateTime.Today, Quantity = 1, Type = "Other" };
+}
