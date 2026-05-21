@@ -35,7 +35,7 @@ else
     var mysqlConn = builder.Configuration.GetConnectionString("localdb")
         ?? throw new InvalidOperationException("MySQL connection string 'localdb' not found.");
     builder.Services.AddDbContextFactory<CollectionDbContext>(options =>
-        options.UseMySql(mysqlConn, ServerVersion.AutoDetect(mysqlConn)));
+        options.UseMySql(mysqlConn, new MySqlServerVersion(new Version(5, 7, 0))));
 }
 
 builder.Services.AddScoped<CollectionService>();
