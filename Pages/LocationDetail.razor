@@ -1,0 +1,159 @@
+@page "/locations/{Id:int}"
+@attribute [Authorize]
+@inject LocationService LocationSvc
+@inject CollectionService Collection
+@inject TcgDexService TcgDex
+@inject IJSRuntime JS
+
+<PageTitle>@(_locationName ?? "Location") &mdash; Clint's Trading Co.</PageTitle>
+
+@if (_loading)
+{
+    <div class="loading-screen">
+        <div class="pokeball-spinner"></div>
+        <p>Loading&hellip;</p>
+    </div>
+}
+else if (_notFound)
+{
+    <div class="error-banner"><strong>Location not found.</strong></div>
+}
+else
+{
+    <div class="locations-page">
+        <div class="list-detail-header">
+            <a href="/locations" class="set-back-btn" title="All Locations">&#8592;</a>
+            <h2 class="page-title" style="margin:0">@_locationName</h2>
+            @if (Id == 0)
+            {
+                <span class="list-shared-badge">Default</span>
+            }
+        </div>
+
+        @if (_loadingCards)
+        {
+            <div class="loc-loading">Loading&hellip;</div>
+        }
+        else if (_cardBriefs.Count == 0)
+        {
+            <div class="loc-empty">No cards stored in this location.</div>
+        }
+        else
+        {
+            <div class="location-cards-summary">
+                @_cardBriefs.Count unique card@(_cardBriefs.Count == 1 ? "" : "s") &mdash;
+                @_cardBriefs.Sum(x => x.Count) total @(_cardBriefs.Sum(x => x.Count) == 1 ? "copy" : "copies")
+            </div>
+            <CardGrid Cards="@(_cardBriefs.Select(x => x.Card).ToList())"
+                      VariantChips="GetVariantChips"
+                      SelectedCard="_selectedCard"
+                      OnCardClick="SelectCardAsync" />
+        }
+    </div>
+}
+
+<CardDetailModal @ref="_modal"
+                 OnCountChanged="HandleCountChanged"
+                 OnClose="HandleModalClose" />
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private string? _locationName;
+    private bool _loading = true;
+    private bool _loadingCards;
+    private bool _notFound;
+    private Dictionary<string, int> _variantCounts = new();
+    private List<(CardBrief Card, int Count)> _cardBriefs = new();
+    private CardBrief? _selectedCard;
+    private CardDetailModal? _modal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id == 0)
+        {
+            _locationName = "Collection";
+        }
+        else
+        {
+            var locs = await LocationSvc.GetAllAsync();
+            var loc  = locs.FirstOrDefault(l => l.Id == Id);
+            if (loc is null) { _notFound = true; _loading = false; return; }
+            _locationName = loc.Name;
+        }
+
+        _loadingCards = true;
+        _loading = false;
+        StateHasChanged();
+        await ReloadCardsAsync();
+        _loadingCards = false;
+    }
+
+    private async Task ReloadCardsAsync()
+    {
+        _variantCounts = await Collection.GetVariantCountsByLocationAsync(Id);
+        var cardIds = _variantCounts.Keys.Select(k => k.Split(':')[0]).Distinct().ToHashSet();
+        if (cardIds.Count == 0) { _cardBriefs = new(); return; }
+
+        var setIds = cardIds
+            .Select(id => { var i = id.LastIndexOf('-'); return i > 0 ? id[..i] : id; })
+            .Distinct().ToArray();
+        var sets = await Task.WhenAll(setIds.Select(s => TcgDex.GetSetAsync(s)));
+        var lookup = sets.Where(s => s is not null)
+            .SelectMany(s => s!.Cards)
+            .GroupBy(c => c.Id)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        _cardBriefs = cardIds.Select(id =>
+        {
+            var idx  = id.LastIndexOf('-');
+            var fb   = new CardBrief { Id = id, Name = id, LocalId = idx > 0 ? id[(idx + 1)..] : id };
+            var card = lookup.GetValueOrDefault(id) ?? fb;
+            var count = _variantCounts.Where(kv => kv.Key.StartsWith(id + ":")).Sum(kv => kv.Value);
+            return (Card: card, Count: count);
+        })
+        .OrderBy(x => x.Card.Id).ToList();
+    }
+
+    private List<(string Variant, int Count)> GetVariantChips(string cardId) =>
+        _variantCounts
+            .Where(kv => kv.Key.StartsWith(cardId + ":") && kv.Value > 0)
+            .Select(kv => (kv.Key.Split(':')[1], kv.Value))
+            .OrderBy(x => x.Item1).ToList();
+
+    private async Task SelectCardAsync(CardBrief card)
+    {
+        _selectedCard = card;
+        await _modal!.OpenAsync(card);
+    }
+
+    private async Task HandleModalClose()
+    {
+        _selectedCard = null;
+        await JS.InvokeVoidAsync("unlockScroll");
+    }
+
+    private async Task HandleCountChanged((string CardId, int NewTotal) update)
+    {
+        var allCounts = await Collection.GetVariantCountsByLocationAsync(Id);
+        var prefix    = update.CardId + ":";
+        foreach (var key in _variantCounts.Keys.Where(k => k.StartsWith(prefix)).ToList())
+            _variantCounts.Remove(key);
+        foreach (var kv in allCounts.Where(kv => kv.Key.StartsWith(prefix) && kv.Value > 0))
+            _variantCounts[kv.Key] = kv.Value;
+        if (!_variantCounts.Any(kv => kv.Key.StartsWith(prefix)))
+        {
+            _cardBriefs = _cardBriefs.Where(x => x.Card.Id != update.CardId).ToList();
+            _selectedCard = null;
+        }
+        else
+        {
+            var existing = _cardBriefs.FirstOrDefault(x => x.Card.Id == update.CardId);
+            if (existing != default)
+            {
+                var newCount = _variantCounts.Where(kv => kv.Key.StartsWith(prefix)).Sum(kv => kv.Value);
+                _cardBriefs = _cardBriefs.Select(x => x.Card.Id == update.CardId ? (x.Card, newCount) : x).ToList();
+            }
+        }
+    }
+}
