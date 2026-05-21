@@ -35,7 +35,8 @@ else
     var mysqlConn = builder.Configuration.GetConnectionString("localdb")
         ?? throw new InvalidOperationException("MySQL connection string 'localdb' not found.");
     builder.Services.AddDbContextFactory<CollectionDbContext>(options =>
-        options.UseMySql(mysqlConn, new MySqlServerVersion(new Version(5, 7, 0))));
+        options.UseMySql(mysqlConn, new MySqlServerVersion(new Version(5, 7, 0)),
+            mysql => mysql.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10), errorNumbersToAdd: null)));
 }
 
 builder.Services.AddScoped<CollectionService>();
@@ -109,8 +110,12 @@ using (var scope = app.Services.CreateScope())
     }
     else
     {
-        // MySQL: EnsureCreated builds the full schema from the EF Core model on first run
-        db.Database.EnsureCreated();
+        // MySQL In-App starts lazily — retry EnsureCreated until it connects
+        for (var attempt = 1; attempt <= 5; attempt++)
+        {
+            try { db.Database.EnsureCreated(); break; }
+            catch when (attempt < 5) { Thread.Sleep(attempt * 3000); }
+        }
     }
 }
 
