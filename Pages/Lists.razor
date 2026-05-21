@@ -1,0 +1,141 @@
+@page "/lists"
+@attribute [Authorize]
+@inject CardListService ListSvc
+
+<PageTitle>Lists &mdash; Clint's Trading Co.</PageTitle>
+
+<div class="locations-page">
+    <h2 class="page-title">My Lists</h2>
+
+    <div class="add-location-form">
+        <h3 class="form-title">New List</h3>
+        <div class="form-row">
+            <input class="loc-input" type="text" placeholder="Name (e.g. Trade Binder)"
+                   @bind="_newName" @bind:event="oninput" maxlength="60" />
+            <select class="loc-select" @bind="_newType">
+                <option value="Standard">Standard</option>
+                <option value="Wishlist">Wishlist</option>
+            </select>
+            <button class="btn-add" @onclick="AddListAsync"
+                    disabled="@(string.IsNullOrWhiteSpace(_newName))">
+                + Create
+            </button>
+        </div>
+        @if (_createError is not null)
+        {
+            <div class="form-error">@_createError</div>
+        }
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loc-loading">Loading&hellip;</div>
+    }
+    else if (_lists.Count == 0)
+    {
+        <div class="loc-empty">No lists yet. Create one above.</div>
+    }
+    else
+    {
+        <div class="location-grid">
+            @foreach (var list in _lists)
+            {
+                <div class="location-card">
+                    <div class="location-card-header">
+                        @if (_editingId == list.Id)
+                        {
+                            <input class="loc-input inline" @bind="_editName" @bind:event="oninput" maxlength="60" />
+                        }
+                        else
+                        {
+                            <a href="/lists/@list.Id" class="list-name-link">@list.Name</a>
+                            @if (list.Type == "Wishlist")
+                            {
+                                <span class="list-type-badge">Wishlist</span>
+                            }
+                            @if (list.ShareToken is not null)
+                            {
+                                <span class="list-shared-badge">Shared</span>
+                            }
+                        }
+                    </div>
+                    <div class="location-card-footer">
+                        <span class="location-count">
+                            @(_listCounts.GetValueOrDefault(list.Id)) unique card@(_listCounts.GetValueOrDefault(list.Id) == 1 ? "" : "s")
+                        </span>
+                        <div class="location-actions">
+                            @if (_editingId == list.Id)
+                            {
+                                <button class="btn-save" @onclick="() => SaveEditAsync(list.Id)">Save</button>
+                                <button class="btn-cancel" @onclick="CancelEdit">Cancel</button>
+                            }
+                            else
+                            {
+                                <button class="btn-edit" @onclick="() => StartEdit(list)">Edit</button>
+                                <button class="btn-delete" @onclick="() => DeleteAsync(list.Id)">Delete</button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<CardList> _lists = new();
+    private Dictionary<int, int> _listCounts = new();
+    private bool _loading = true;
+    private string _newName = "";
+    private string _newType = "Standard";
+    private string? _createError;
+    private int _editingId = -1;
+    private string _editName = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+        _loading = false;
+    }
+
+    private async Task RefreshAsync()
+    {
+        var listsTask  = ListSvc.GetAllAsync();
+        var countsTask = ListSvc.GetUniqueCardCountsPerListAsync();
+        await Task.WhenAll(listsTask, countsTask);
+        _lists      = listsTask.Result;
+        _listCounts = countsTask.Result;
+    }
+
+    private async Task AddListAsync()
+    {
+        _createError = null;
+        if (string.IsNullOrWhiteSpace(_newName)) return;
+        if (_lists.Any(l => l.Name.Equals(_newName.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            _createError = "A list with that name already exists.";
+            return;
+        }
+        await ListSvc.AddAsync(_newName, _newType);
+        _newName = "";
+        await RefreshAsync();
+    }
+
+    private void StartEdit(CardList list) { _editingId = list.Id; _editName = list.Name; }
+
+    private async Task SaveEditAsync(int id)
+    {
+        if (string.IsNullOrWhiteSpace(_editName)) return;
+        await ListSvc.UpdateAsync(id, _editName);
+        _editingId = -1;
+        await RefreshAsync();
+    }
+
+    private void CancelEdit() => _editingId = -1;
+
+    private async Task DeleteAsync(int id)
+    {
+        await ListSvc.DeleteAsync(id);
+        await RefreshAsync();
+    }
+}

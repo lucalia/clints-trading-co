@@ -1,0 +1,532 @@
+@page "/lists/{Id:int}"
+@attribute [Authorize]
+@inject CardListService ListSvc
+@inject CollectionService Collection
+@inject LocationService LocationSvc
+@inject TcgDexService TcgDex
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>@(_list?.Name ?? "List") &mdash; Clint's Trading Co.</PageTitle>
+
+@if (_loading)
+{
+    <div class="loading-screen">
+        <div class="pokeball-spinner"></div>
+        <p>Loading list&hellip;</p>
+    </div>
+}
+else if (_list is null)
+{
+    <div class="error-banner"><strong>List not found.</strong></div>
+}
+else
+{
+    <div class="locations-page">
+
+        <div class="list-detail-header">
+            <a href="/lists" class="set-back-btn" title="All Lists">&#8592;</a>
+            <h2 class="page-title" style="margin:0">@_list.Name</h2>
+            @if (_list.Type == "Wishlist")
+            {
+                <span class="list-type-badge">Wishlist</span>
+            }
+            <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center">
+                @if (_addStep == AddStep.Hidden)
+                {
+                    <button class="btn-add" style="padding:.35rem .85rem;font-size:.85rem"
+                            @onclick="OpenAddCardAsync">+ Add Card</button>
+                }
+                <button class="btn-share @(_list.ShareToken is not null ? "active" : "")"
+                        @onclick="ToggleSharePanel">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <circle cx="12" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="12" cy="13" r="1.5"/>
+                        <line x1="10.6" y1="4.2" x2="5.4" y2="6.8"/><line x1="5.4" y1="9.2" x2="10.6" y2="11.8"/>
+                    </svg>
+                    Share
+                </button>
+            </div>
+        </div>
+
+        @if (_showShare)
+        {
+            <div class="share-panel" style="margin-bottom:1rem">
+                @if (_list.ShareToken is null)
+                {
+                    <span style="color:var(--text2);font-size:.85rem">Generating link&hellip;</span>
+                }
+                else
+                {
+                    var url = $"{Nav.BaseUri}list/share/{_list.ShareToken}";
+                    <input class="share-url-input" readonly value="@url" />
+                    <button class="btn-edit" @onclick="() => CopyAsync(url)">Copy</button>
+                    <button class="btn-delete" @onclick="RevokeShareAsync">Revoke</button>
+                }
+            </div>
+        }
+
+        @if (_fulfillMsg is not null)
+        {
+            <div class="add-success" style="margin-bottom:1rem">@_fulfillMsg</div>
+        }
+
+        @if (_addStep != AddStep.Hidden)
+        {
+            <div class="add-card-panel">
+                @if (_addStep == AddStep.SetSearch)
+                {
+                    <div class="step-header">
+                        <span class="step-title">Pick a Set</span>
+                        <button class="btn-cancel" @onclick="CloseAddPanel">Cancel</button>
+                    </div>
+                    <input class="loc-input add-card-search" type="text" placeholder="Search sets&hellip;"
+                           @bind="_setSearch" @bind:event="oninput" />
+                    @if (_setsLoading)
+                    {
+                        <div class="loc-loading" style="padding:1rem 0">Loading sets&hellip;</div>
+                    }
+                    else
+                    {
+                        var fSets = FilteredSets.ToList();
+                        <div class="set-pick-list">
+                            @foreach (var set in fSets)
+                            {
+                                <button class="set-pick-item" @onclick="() => SelectSetAsync(set)">
+                                    @if (set.Logo is not null)
+                                    {
+                                        <img class="set-pick-logo" src="@(set.Logo + ".webp")" alt=""
+                                             onerror="this.style.display='none'" />
+                                    }
+                                    <span>@set.Name</span>
+                                    @if (_ownedSetIds.Contains(set.Id))
+                                    {
+                                        <span class="list-shared-badge" style="margin-left:auto">Owned</span>
+                                    }
+                                </button>
+                            }
+                            @if (fSets.Count == 0)
+                            {
+                                <div class="loc-empty" style="padding:.75rem 0">No sets match your search.</div>
+                            }
+                        </div>
+                    }
+                }
+                else if (_addStep == AddStep.CardPick)
+                {
+                    <div class="step-header">
+                        <button class="btn-cancel" @onclick="() => { _addStep = AddStep.SetSearch; _addSuccessMsg = null; }">&#8592; Back</button>
+                        <span class="step-title">@_addSetBrief?.Name</span>
+                        <button class="btn-cancel" @onclick="CloseAddPanel">Done</button>
+                    </div>
+                    @if (_addSuccessMsg is not null)
+                    {
+                        <div class="add-success">@_addSuccessMsg</div>
+                    }
+                    <input class="loc-input add-card-search" type="text" placeholder="Search cards&hellip;"
+                           @bind="_addCardFilter" @bind:event="oninput" />
+                    @if (_loadingAddSet)
+                    {
+                        <div class="loc-loading" style="padding:1rem 0">Loading cards&hellip;</div>
+                    }
+                    else
+                    {
+                        <CardGrid Cards="FilteredAddCards"
+                                  VariantChips="GetCollectionVariantChips"
+                                  SelectedCard="_addCard"
+                                  OnCardClick="PickAddCard" />
+                    }
+                }
+                else if (_addStep == AddStep.Configure)
+                {
+                    <div class="step-header">
+                        <button class="btn-cancel" @onclick="() => { _addStep = AddStep.CardPick; _addConfigError = null; }">&#8592; Back</button>
+                        <span class="step-title">Configure Entry</span>
+                        <button class="btn-cancel" @onclick="CloseAddPanel">Cancel</button>
+                    </div>
+                    <div class="configure-form">
+                        <div class="configure-card-preview">
+                            @if (_addCard!.Image is not null)
+                            {
+                                <img src="@(_addCard.Image + "/low.webp")" alt="@_addCard.Name" class="configure-card-img" />
+                            }
+                            <div>
+                                <div class="configure-card-name">@_addCard.Name</div>
+                                <div class="card-tile-id">#@_addCard.LocalId</div>
+                            </div>
+                        </div>
+                        <div class="configure-fields">
+                            <label class="configure-label">
+                                Variant
+                                <select class="loc-select" @bind="_addVariant" disabled="@(_addCardDetail is null)">
+                                    @if (_addCardDetail is null)
+                                    {
+                                        <option value="Normal">Loading&hellip;</option>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var v in AddCardVariants())
+                                        {
+                                            <option value="@v">@VariantLabel(v)</option>
+                                        }
+                                    }
+                                </select>
+                            </label>
+                            @if (_list.Type != "Wishlist")
+                            {
+                                <label class="configure-label">
+                                    Location
+                                    <select class="loc-select" @bind="_addLocationId">
+                                        <option value="0">Collection</option>
+                                        @foreach (var loc in _locations)
+                                        {
+                                            <option value="@loc.Id">@loc.Name</option>
+                                        }
+                                    </select>
+                                </label>
+                            }
+                            <label class="configure-label">
+                                @(_list.Type == "Wishlist" ? "Wanted count" : "Count")
+                                <input class="loc-input" style="width:80px" type="number" min="0" max="@MaxAddCount"
+                                       @bind="_addCount" />
+                            </label>
+                        </div>
+                        @if (_addConfigError is not null)
+                        {
+                            <div class="form-error">@_addConfigError</div>
+                        }
+                        <div class="configure-actions">
+                            <button class="btn-add" @onclick="SubmitAddCardAsync">
+                                @(_list.Type == "Wishlist" ? "Add to Wishlist" : "Add to List")
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (_loadingCards)
+        {
+            <div class="loc-loading">Loading&hellip;</div>
+        }
+        else if (_listCardBriefs.Count == 0)
+        {
+            <div class="loc-empty">
+                No cards in this list yet.
+                @if (_addStep == AddStep.Hidden)
+                {
+                    <span> Click <strong>+ Add Card</strong> to get started.</span>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="location-cards-summary">
+                @_listCardBriefs.Count unique card@(_listCardBriefs.Count == 1 ? "" : "s") &mdash;
+                @_listCardBriefs.Sum(x => x.Count) total @(_listCardBriefs.Sum(x => x.Count) == 1 ? "copy" : "copies")
+            </div>
+            <CardGrid Cards="@(_listCardBriefs.Select(x => x.Card).ToList())"
+                      VariantChips="@(_list!.Type == "Wishlist" ? GetWishlistDisplayChips : GetListVariantChips)"
+                      SelectedCard="_selectedCard"
+                      OnCardClick="SelectCardAsync"
+                      OnRemove="RemoveCardAsync" />
+        }
+
+    </div>
+}
+
+<CardDetailModal @ref="_modal" OnClose="HandleModalClose" />
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private CardList? _list;
+    private Dictionary<string, int> _listVariantCounts = new();
+    private List<(CardBrief Card, int Count)> _listCardBriefs = new();
+    private Dictionary<string, int> _collectionVariantCounts = new();
+    private bool _loading = true;
+    private bool _loadingCards;
+    private string? _fulfillMsg;
+    private List<Location> _locations = new();
+
+    private bool _showShare;
+    private CardBrief? _selectedCard;
+    private CardDetailModal? _modal;
+
+    // Add card flow
+    private enum AddStep { Hidden, SetSearch, CardPick, Configure }
+    private AddStep _addStep = AddStep.Hidden;
+
+    private List<SetBrief> _allSets = new();
+    private HashSet<string> _ownedSetIds = new();
+    private string _setSearch = "";
+    private bool _setsLoaded;
+    private bool _setsLoading;
+
+    private SetBrief? _addSetBrief;
+    private SetResponse? _addSetFull;
+    private List<CardBrief> _addSetAllCards = new();
+    private string _addCardFilter = "";
+    private bool _loadingAddSet;
+    private string? _addSuccessMsg;
+    private CardDetail? _addCardDetail;
+
+    private CardBrief? _addCard;
+    private string _addVariant = "Normal";
+    private int _addLocationId;
+    private int _addCount = 1;
+    private string? _addConfigError;
+
+    private int MaxAddCount => _list?.Type == "Wishlist"
+        ? 999
+        : Math.Max(1, _collectionVariantCounts.GetValueOrDefault($"{_addCard?.Id}:{_addVariant}", 0) > 0
+            ? _collectionVariantCounts.GetValueOrDefault($"{_addCard?.Id}:{_addVariant}")
+            : 999);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var listTask  = ListSvc.GetAllAsync();
+        var locsTask  = LocationSvc.GetAllAsync();
+        var colTask   = Collection.GetAllVariantCountsAsync();
+        await Task.WhenAll(listTask, locsTask, colTask);
+
+        _list                   = listTask.Result.FirstOrDefault(l => l.Id == Id);
+        _locations              = locsTask.Result;
+        _collectionVariantCounts = colTask.Result;
+
+        if (_list is not null)
+        {
+            _loadingCards = true;
+            StateHasChanged();
+            await ReloadListCardsAsync();
+
+            if (_list.Type == "Wishlist")
+            {
+                var removed = await ListSvc.FulfillWishlistAsync(Id);
+                if (removed.Count > 0)
+                {
+                    var names = removed.Select(e =>
+                    {
+                        var brief = _listCardBriefs.FirstOrDefault(b => b.Card.Id == e.CardId);
+                        var cardName = brief != default ? brief.Card.Name : e.CardId;
+                        return $"{cardName} ({e.Variant}, wanted {e.Wanted})";
+                    });
+                    _fulfillMsg = $"Goal met — removed from wishlist: {string.Join("; ", names)}.";
+                    await ReloadListCardsAsync();
+                }
+            }
+            _loadingCards = false;
+        }
+        _loading = false;
+    }
+
+    private async Task ReloadListCardsAsync()
+    {
+        _listVariantCounts = await ListSvc.GetVariantCountsByListAsync(Id);
+        var cardIds = _listVariantCounts.Keys.Select(k => k.Split(':')[0]).Distinct().ToHashSet();
+        if (cardIds.Count == 0) { _listCardBriefs = new(); return; }
+
+        var setIds = cardIds
+            .Select(id => { var i = id.LastIndexOf('-'); return i > 0 ? id[..i] : id; })
+            .Distinct().ToArray();
+        var sets = await Task.WhenAll(setIds.Select(s => TcgDex.GetSetAsync(s)));
+        var cardLookup = sets.Where(s => s is not null)
+            .SelectMany(s => s!.Cards)
+            .GroupBy(c => c.Id)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        _listCardBriefs = cardIds.Select(id =>
+        {
+            var idx = id.LastIndexOf('-');
+            var fallback = new CardBrief { Id = id, Name = id, LocalId = idx > 0 ? id[(idx + 1)..] : id };
+            var card  = cardLookup.GetValueOrDefault(id) ?? fallback;
+            var count = _listVariantCounts.Where(kv => kv.Key.StartsWith(id + ":")).Sum(kv => kv.Value);
+            return (Card: card, Count: count);
+        })
+        .OrderBy(x => x.Card.Id).ToList();
+    }
+
+    private List<(string Variant, int Count)> GetListVariantChips(string cardId) =>
+        _listVariantCounts
+            .Where(kv => kv.Key.StartsWith(cardId + ":") && kv.Value > 0)
+            .Select(kv => (kv.Key.Split(':')[1], kv.Value))
+            .OrderBy(x => x.Item1).ToList();
+
+    // For wishlists: show max(0, wanted - owned) so chips reflect remaining needed
+    private List<(string Variant, int Count)> GetWishlistDisplayChips(string cardId) =>
+        _listVariantCounts
+            .Where(kv => kv.Key.StartsWith(cardId + ":") && kv.Value > 0)
+            .Select(kv =>
+            {
+                var variant = kv.Key.Split(':')[1];
+                var remaining = Math.Max(0, kv.Value - _collectionVariantCounts.GetValueOrDefault(kv.Key, 0));
+                return (variant, remaining);
+            })
+            .Where(x => x.remaining > 0)
+            .OrderBy(x => x.variant).ToList();
+
+    private List<(string Variant, int Count)> GetCollectionVariantChips(string cardId) =>
+        _collectionVariantCounts
+            .Where(kv => kv.Key.StartsWith(cardId + ":") && kv.Value > 0)
+            .Select(kv => (kv.Key.Split(':')[1], kv.Value))
+            .OrderBy(x => x.Item1).ToList();
+
+    private async Task SelectCardAsync(CardBrief card)
+    {
+        _selectedCard = card;
+        await _modal!.OpenAsync(card, "lists");
+    }
+
+    private async Task HandleModalClose()
+    {
+        _selectedCard = null;
+        await JS.InvokeVoidAsync("unlockScroll");
+    }
+
+    private async Task RemoveCardAsync(CardBrief card)
+    {
+        await ListSvc.RemoveCardAsync(Id, card.Id);
+        await ReloadListCardsAsync();
+    }
+
+    // ── Sharing ──────────────────────────────────────────────────────────
+
+    private async Task ToggleSharePanel()
+    {
+        _showShare = !_showShare;
+        if (_showShare && _list!.ShareToken is null)
+        {
+            await ListSvc.GenerateShareTokenAsync(Id);
+            var updated = await ListSvc.GetAllAsync();
+            _list = updated.FirstOrDefault(l => l.Id == Id) ?? _list;
+        }
+    }
+
+    private async Task RevokeShareAsync()
+    {
+        await ListSvc.RevokeShareTokenAsync(Id);
+        var updated = await ListSvc.GetAllAsync();
+        _list = updated.FirstOrDefault(l => l.Id == Id) ?? _list;
+        _showShare = false;
+    }
+
+    private async Task CopyAsync(string url) =>
+        await JS.InvokeVoidAsync("copyToClipboard", url);
+
+    // ── Add card flow ─────────────────────────────────────────────────────
+
+    private async Task OpenAddCardAsync()
+    {
+        _addStep = AddStep.SetSearch;
+        _addSuccessMsg = null;
+        if (_setsLoaded) return;
+        _setsLoading = true;
+        StateHasChanged();
+        var setsTask  = TcgDex.GetSetsAsync();
+        var ownedTask = Collection.GetAllCountsAsync();
+        await Task.WhenAll(setsTask, ownedTask);
+        _allSets     = setsTask.Result;
+        _ownedSetIds = ownedTask.Result.Keys
+            .Select(id => { var i = id.LastIndexOf('-'); return i > 0 ? id[..i] : id; })
+            .ToHashSet();
+        _setsLoaded  = true;
+        _setsLoading = false;
+    }
+
+    private IEnumerable<SetBrief> FilteredSets =>
+        _allSets
+            .Where(s => !IsTcgpSet(s))
+            .Where(s => string.IsNullOrWhiteSpace(_setSearch) ||
+                        s.Name.Contains(_setSearch, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(s => _ownedSetIds.Contains(s.Id))
+            .ThenBy(s => s.Name)
+            .Take(40);
+
+    private static bool IsTcgpSet(SetBrief s)
+    {
+        if (s.Logo is null) return s.Id.Length > 0 && char.IsUpper(s.Id[0]);
+        var parts = s.Logo.Split('/');
+        var en = Array.IndexOf(parts, "en");
+        return en >= 0 && en + 1 < parts.Length && parts[en + 1] == "tcgp";
+    }
+
+    private async Task SelectSetAsync(SetBrief set)
+    {
+        _addSetBrief   = set;
+        _addStep       = AddStep.CardPick;
+        _loadingAddSet = true;
+        _addCardFilter = "";
+        _addCard       = null;
+        _addSuccessMsg = null;
+        StateHasChanged();
+        _addSetFull     = await TcgDex.GetSetAsync(set.Id);
+        _addSetAllCards = _addSetFull?.Cards.ToList() ?? new();
+        _loadingAddSet  = false;
+    }
+
+    private List<CardBrief> FilteredAddCards =>
+        string.IsNullOrWhiteSpace(_addCardFilter)
+            ? _addSetAllCards
+            : _addSetAllCards
+                .Where(c => c.Name.Contains(_addCardFilter, StringComparison.OrdinalIgnoreCase) ||
+                            c.LocalId.Contains(_addCardFilter, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+    private async Task PickAddCard(CardBrief card)
+    {
+        _addCard        = card;
+        _addVariant     = "Normal";
+        _addLocationId  = 0;
+        _addCount       = 1;
+        _addConfigError = null;
+        _addCardDetail  = null;
+        _addStep        = AddStep.Configure;
+        StateHasChanged();
+        var idx   = card.Id.LastIndexOf('-');
+        var setId = idx > 0 ? card.Id[..idx] : card.Id;
+        try { _addCardDetail = await TcgDex.GetCardAsync(setId, card.LocalId); } catch { }
+        _addVariant = AddCardVariants().FirstOrDefault() ?? "Normal";
+    }
+
+    private List<string> AddCardVariants()
+    {
+        if (_addCardDetail?.Variants is not { } v) return ["Normal"];
+        var list = new List<string>();
+        if (v.Normal)       list.Add("Normal");
+        if (v.Reverse)      list.Add("Reverse");
+        if (v.Holo)         list.Add("Holo");
+        if (v.FirstEdition) list.Add("FirstEdition");
+        if (v.WPromo)       list.Add("WPromo");
+        return list.Count > 0 ? list : ["Normal"];
+    }
+
+    private static string VariantLabel(string v) => v switch
+    {
+        "FirstEdition" => "1st Edition",
+        _ => v
+    };
+
+    private async Task SubmitAddCardAsync()
+    {
+        if (_addCard is null) return;
+        if (_addCount < 0) { _addConfigError = "Count cannot be negative."; return; }
+        _addConfigError = null;
+        await ListSvc.SetEntryAsync(Id, _addCard.Id, _addLocationId, _addVariant, _addCount);
+        _addSuccessMsg = $"{_addCard.Name} ({_addVariant}) added!";
+        await ReloadListCardsAsync();
+        _addStep = AddStep.CardPick;
+    }
+
+    private void CloseAddPanel()
+    {
+        _addStep         = AddStep.Hidden;
+        _addCard         = null;
+        _addSetBrief     = null;
+        _addSetFull      = null;
+        _addSetAllCards  .Clear();
+        _addCardFilter   = "";
+        _setSearch       = "";
+        _addConfigError  = null;
+        _addSuccessMsg   = null;
+        _addCardDetail   = null;
+    }
+}

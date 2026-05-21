@@ -1,0 +1,102 @@
+@page "/list/share/{Token}"
+@inject CardListService ListSvc
+@inject TcgDexService TcgDex
+@inject IJSRuntime JS
+
+<PageTitle>@(_list?.Name ?? "Shared List") &mdash; Clint's Trading Co.</PageTitle>
+
+@if (_loading)
+{
+    <div class="loading-screen">
+        <div class="pokeball-spinner"></div>
+        <p>Loading&hellip;</p>
+    </div>
+}
+else if (_list is null)
+{
+    <div style="text-align:center;padding:4rem 0;color:var(--text2)">
+        <h2 style="color:var(--text);margin-bottom:.5rem">List not found</h2>
+        <p>This share link may have been revoked or is invalid.</p>
+    </div>
+}
+else
+{
+    <div class="locations-page">
+        <div class="list-detail-header">
+            <h2 class="page-title" style="margin:0">@_list.Name</h2>
+            @if (_list.Type == "Wishlist")
+            {
+                <span class="list-type-badge">Wishlist</span>
+            }
+            <span class="list-shared-badge" style="margin-left:auto">Read-only shared view</span>
+        </div>
+
+        @if (_listCardBriefs.Count == 0)
+        {
+            <div class="loc-empty">This list has no cards.</div>
+        }
+        else
+        {
+            <div class="location-cards-summary">
+                @_listCardBriefs.Count unique card@(_listCardBriefs.Count == 1 ? "" : "s") &mdash;
+                @_listCardBriefs.Sum(x => x.Count) total @(_listCardBriefs.Sum(x => x.Count) == 1 ? "copy" : "copies")
+            </div>
+            <CardGrid Cards="@(_listCardBriefs.Select(x => x.Card).ToList())"
+                      VariantChips="GetVariantChips"
+                      OnCardClick="SelectCardAsync" />
+        }
+    </div>
+}
+
+<CardDetailModal @ref="_modal" ReadOnly="true" />
+
+@code {
+    [Parameter] public string Token { get; set; } = "";
+
+    private CardList? _list;
+    private Dictionary<string, int> _variantCounts = new();
+    private List<(CardBrief Card, int Count)> _listCardBriefs = new();
+    private bool _loading = true;
+    private CardDetailModal? _modal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _list = await ListSvc.GetByShareTokenAsync(Token);
+        if (_list is not null)
+        {
+            _variantCounts = await ListSvc.GetVariantCountsByListAsync(_list.Id);
+            var cardIds = _variantCounts.Keys.Select(k => k.Split(':')[0]).Distinct().ToHashSet();
+            if (cardIds.Count > 0)
+            {
+                var setIds = cardIds
+                    .Select(id => { var i = id.LastIndexOf('-'); return i > 0 ? id[..i] : id; })
+                    .Distinct().ToArray();
+                var sets = await Task.WhenAll(setIds.Select(s => TcgDex.GetSetAsync(s)));
+                var lookup = sets.Where(s => s is not null)
+                    .SelectMany(s => s!.Cards)
+                    .GroupBy(c => c.Id)
+                    .ToDictionary(g => g.Key, g => g.First());
+
+                _listCardBriefs = cardIds.Select(id =>
+                {
+                    var idx = id.LastIndexOf('-');
+                    var fb  = new CardBrief { Id = id, Name = id, LocalId = idx > 0 ? id[(idx + 1)..] : id };
+                    var card  = lookup.GetValueOrDefault(id) ?? fb;
+                    var count = _variantCounts.Where(kv => kv.Key.StartsWith(id + ":")).Sum(kv => kv.Value);
+                    return (Card: card, Count: count);
+                })
+                .OrderBy(x => x.Card.Id).ToList();
+            }
+        }
+        _loading = false;
+    }
+
+    private List<(string Variant, int Count)> GetVariantChips(string cardId) =>
+        _variantCounts
+            .Where(kv => kv.Key.StartsWith(cardId + ":") && kv.Value > 0)
+            .Select(kv => (kv.Key.Split(':')[1], kv.Value))
+            .OrderBy(x => x.Item1).ToList();
+
+    private async Task SelectCardAsync(CardBrief card) =>
+        await _modal!.OpenAsync(card);
+}
