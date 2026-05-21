@@ -18,6 +18,7 @@ steps:
   inputs:
     command: 'restore'
     projects: '**/*.csproj'
+    arguments: '--runtime win-x86'
 
 - task: DotNetCoreCLI@2
   displayName: 'Build'
@@ -31,7 +32,7 @@ steps:
   inputs:
     command: 'publish'
     publishWebProjects: true
-    arguments: '--configuration $(buildConfiguration) --no-restore --output $(Build.ArtifactStagingDirectory)'
+    arguments: '--configuration $(buildConfiguration) --runtime win-x86 --self-contained false --no-restore --output $(Build.ArtifactStagingDirectory)'
     zipAfterPublish: true
     modifyOutputPath: false
 
