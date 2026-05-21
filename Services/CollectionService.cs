@@ -80,6 +80,53 @@ public class CollectionService(IDbContextFactory<CollectionDbContext> factory)
             .ToDictionaryAsync(x => x.CardId, x => x.Count);
     }
 
+    // Returns Dictionary keyed by "{cardId}:{variant}" → count for a specific location
+    public async Task<Dictionary<string, int>> GetVariantCountsByLocationAsync(int locationId)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var rows = await db.CollectionEntries
+            .Where(e => e.LocationId == locationId)
+            .GroupBy(e => new { e.CardId, e.Variant })
+            .Select(g => new { g.Key.CardId, g.Key.Variant, Count = g.Sum(e => e.Count) })
+            .ToListAsync();
+        return rows.ToDictionary(x => $"{x.CardId}:{x.Variant}", x => x.Count);
+    }
+
+    public async Task MoveCardCountAsync(string cardId, string variant, int fromLocationId, int toLocationId, int count)
+    {
+        if (fromLocationId == toLocationId || count <= 0) return;
+        await using var db = await factory.CreateDbContextAsync();
+        var src = await db.CollectionEntries.FindAsync(cardId, fromLocationId, variant);
+        if (src is null || src.Count < count) return;
+        src.Count -= count;
+        if (src.Count == 0) db.CollectionEntries.Remove(src);
+        var dest = await db.CollectionEntries.FindAsync(cardId, toLocationId, variant);
+        if (dest is null)
+            db.CollectionEntries.Add(new CollectionEntry { CardId = cardId, LocationId = toLocationId, Variant = variant, Count = count });
+        else
+            dest.Count += count;
+        await db.SaveChangesAsync();
+    }
+
+    public async Task MoveCardsAsync(int fromLocationId, int toLocationId)
+    {
+        if (fromLocationId == toLocationId) return;
+        await using var db = await factory.CreateDbContextAsync();
+        var sources = await db.CollectionEntries
+            .Where(e => e.LocationId == fromLocationId)
+            .ToListAsync();
+        foreach (var src in sources)
+        {
+            var dest = await db.CollectionEntries.FindAsync(src.CardId, toLocationId, src.Variant);
+            if (dest is null)
+                db.CollectionEntries.Add(new CollectionEntry { CardId = src.CardId, LocationId = toLocationId, Variant = src.Variant, Count = src.Count });
+            else
+                dest.Count += src.Count;
+            db.CollectionEntries.Remove(src);
+        }
+        await db.SaveChangesAsync();
+    }
+
     public async Task MoveToUnassignedAsync(int locationId)
     {
         await using var db = await factory.CreateDbContextAsync();
