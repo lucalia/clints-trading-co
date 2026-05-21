@@ -22,22 +22,9 @@ builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 builder.Services.AddHttpClient<TcgDexService>();
 
-if (builder.Environment.IsDevelopment())
-{
-    // Local dev: SQLite
-    var dbPath = Path.Combine(builder.Environment.ContentRootPath, "collection.db");
-    builder.Services.AddDbContextFactory<CollectionDbContext>(options =>
-        options.UseSqlite($"Data Source={dbPath}"));
-}
-else
-{
-    // Production: MySQL In-App (Azure App Service injects MYSQLCONNSTR_localdb)
-    var mysqlConn = builder.Configuration.GetConnectionString("localdb")
-        ?? throw new InvalidOperationException("MySQL connection string 'localdb' not found.");
-    builder.Services.AddDbContextFactory<CollectionDbContext>(options =>
-        options.UseMySql(mysqlConn, new MySqlServerVersion(new Version(5, 7, 0)),
-            mysql => mysql.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10), errorNumbersToAdd: null)));
-}
+var dbPath = Path.Combine(builder.Environment.ContentRootPath, "collection.db");
+builder.Services.AddDbContextFactory<CollectionDbContext>(options =>
+    options.UseSqlite($"Data Source={dbPath}"));
 
 builder.Services.AddScoped<CollectionService>();
 builder.Services.AddScoped<LocationService>();
@@ -50,10 +37,12 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<CollectionDbContext>();
 
-    if (app.Environment.IsDevelopment())
     {
         // SQLite: EnsureCreated + additive raw SQL migrations to preserve existing data
         db.Database.EnsureCreated();
+        // Azure App Service uses Azure Files (network share) which doesn't support SQLite's
+        // default WAL journal mode. Delete mode works on all file systems.
+        db.Database.ExecuteSqlRaw("PRAGMA journal_mode=delete;");
 
         db.Database.ExecuteSqlRaw(@"
             CREATE TABLE IF NOT EXISTS CardLists (
@@ -107,15 +96,6 @@ using (var scope = app.Services.CreateScope())
                 ReceiptUrl  TEXT,
                 Notes       TEXT
             )");
-    }
-    else
-    {
-        // MySQL In-App starts lazily — retry EnsureCreated until it connects
-        for (var attempt = 1; attempt <= 5; attempt++)
-        {
-            try { db.Database.EnsureCreated(); break; }
-            catch when (attempt < 5) { Thread.Sleep(attempt * 3000); }
-        }
     }
 }
 
