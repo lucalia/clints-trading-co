@@ -24,7 +24,7 @@ builder.Services.AddHttpClient<TcgDexService>();
 
 var dbPath = Path.Combine(builder.Environment.ContentRootPath, "collection.db");
 builder.Services.AddDbContextFactory<CollectionDbContext>(options =>
-    options.UseSqlite($"Data Source={dbPath}"));
+    options.UseSqlite($"Data Source={dbPath};Journal Mode=Delete"));
 builder.Services.AddScoped<CollectionService>();
 builder.Services.AddScoped<LocationService>();
 builder.Services.AddScoped<CardListService>();
