@@ -18,7 +18,6 @@ steps:
   inputs:
     command: 'restore'
     projects: '**/*.csproj'
-    arguments: '--runtime win-x86'
 
 - task: DotNetCoreCLI@2
   displayName: 'Build'
