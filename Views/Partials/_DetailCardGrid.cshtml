@@ -53,8 +53,7 @@
                     {
                         <button class="card-remove-btn"
                                 title="Remove from list"
-                                hx-post="@Model.RemoveUrl"
-                                hx-vals='{"cardId":"@card.Id"}'
+                                hx-post="@(Model.RemoveUrl)?cardId=@Uri.EscapeDataString(card.Id)"
                                 hx-target="#list-cards"
                                 hx-swap="innerHTML"
                                 hx-include="[name='__RequestVerificationToken']"
@@ -64,8 +63,7 @@
                     {
                         <button class="card-remove-btn"
                                 title="Unlink from purchase"
-                                hx-post="@Model.UnlinkUrl"
-                                hx-vals='{"cardId":"@card.Id"}'
+                                hx-post="@(Model.UnlinkUrl)?cardId=@Uri.EscapeDataString(card.Id)"
                                 hx-target="#purchase-cards"
                                 hx-swap="innerHTML"
                                 hx-include="[name='__RequestVerificationToken']"

@@ -67,8 +67,9 @@ public class PartialsController(
             new CardGridViewModel(setId, cards, variantCounts, counts, q ?? "", filter ?? "all"));
     }
 
-    // ── Card modal ───────────────────────────────────────────────────────
+    // ── Card modal (anonymous-accessible — card data is public) ─────────
 
+    [AllowAnonymous]
     [HttpGet("card-modal/{cardId}")]
     public async Task<IActionResult> CardModal(string cardId)
     {
@@ -76,17 +77,31 @@ public class PartialsController(
         var setId   = idx > 0 ? cardId[..idx]    : cardId;
         var localId = idx > 0 ? cardId[(idx + 1)..] : cardId;
 
-        var detailTask    = tcgDex.GetCardAsync(setId, localId);
-        var locationsTask = locationSvc.GetAllAsync();
-        var setTask       = tcgDex.GetSetAsync(setId);
-        var variantTask   = collection.GetVariantCountsForCardAsync(cardId);
-        await Task.WhenAll(detailTask, locationsTask, setTask, variantTask);
+        var detailTask = tcgDex.GetCardAsync(setId, localId);
+        var setTask    = tcgDex.GetSetAsync(setId);
+
+        // Only load collection data for authenticated users
+        Task<Dictionary<string, int>> variantTask;
+        Task<List<Location>> locationsTask;
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            variantTask   = collection.GetVariantCountsForCardAsync(cardId);
+            locationsTask = locationSvc.GetAllAsync();
+        }
+        else
+        {
+            variantTask   = Task.FromResult(new Dictionary<string, int>());
+            locationsTask = Task.FromResult(new List<Location>());
+        }
+
+        await Task.WhenAll(detailTask, setTask, variantTask, locationsTask);
 
         var card = setTask.Result?.Cards.FirstOrDefault(c => c.Id == cardId);
         return PartialView("~/Views/Partials/_CardModal.cshtml",
             new CardModalViewModel(card, detailTask.Result, variantTask.Result, locationsTask.Result));
     }
 
+    [AllowAnonymous]
     [HttpGet("modal-tab/{cardId}/info")]
     public async Task<IActionResult> ModalTabInfo(string cardId)
     {

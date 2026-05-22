@@ -6,6 +6,8 @@
     var setId = Model.Card.Id.Contains('-')
         ? Model.Card.Id[..Model.Card.Id.LastIndexOf('-')]
         : Model.Card.Id;
+    var pre = (string.IsNullOrEmpty(Model.PreListId) ? "" : $"&preListId={Uri.EscapeDataString(Model.PreListId)}")
+            + (string.IsNullOrEmpty(Model.PrePurchaseId) ? "" : $"&prePurchaseId={Uri.EscapeDataString(Model.PrePurchaseId)}");
 }
 
 <div class="modal-overlay" onclick="closeAddCollection()">
@@ -15,10 +17,9 @@
             <h2 class="modal-card-name" style="font-size:1.1rem;margin-bottom:.75rem">Add Card to Collection</h2>
             <div class="step-header" style="margin-bottom:.75rem">
                 <button type="button" class="btn-cancel"
-                        hx-get="/partials/add-to-collection/cards"
+                        hx-get="/partials/add-to-collection/cards?setId=@Uri.EscapeDataString(setId)@pre"
                         hx-target="#add-collection-host"
-                        hx-swap="innerHTML"
-                        hx-vals='{"setId":"@setId"}'>&#8592; Back</button>
+                        hx-swap="innerHTML">&#8592; Back</button>
                 <span class="step-title">Configure</span>
             </div>
 
@@ -84,7 +85,9 @@
                                     var remaining = p.Quantity - linked;
                                     @if (remaining > 0)
                                     {
-                                        <option value="@p.Id">@p.Description (@p.PurchasedAt.ToString("MMM d") — @remaining slots left)</option>
+                                        <option value="@p.Id" selected="@(p.Id == Model.PrePurchaseId ? "selected" : null)">
+                                            @p.Description (@p.PurchasedAt.ToString("MMM d") — @remaining slots left)
+                                        </option>
                                     }
                                 }
                             </select>
@@ -99,7 +102,8 @@
                                 @foreach (var list in Model.StandardLists)
                                 {
                                     <label style="display:flex;align-items:center;gap:.5rem;font-size:.85rem;font-weight:400;cursor:pointer">
-                                        <input type="checkbox" name="ListIds" value="@list.Id" />
+                                        <input type="checkbox" name="ListIds" value="@list.Id"
+                                               @(list.Id == Model.PreListId ? "checked" : "") />
                                         @list.Name
                                     </label>
                                 }

@@ -1,13 +1,17 @@
 @using ClintCardShop.Models
 @model AddToCollectionSetsViewModel
 
+@{
+    var pre = (string.IsNullOrEmpty(Model.PreListId) ? "" : $"&preListId={Uri.EscapeDataString(Model.PreListId)}")
+            + (string.IsNullOrEmpty(Model.PrePurchaseId) ? "" : $"&prePurchaseId={Uri.EscapeDataString(Model.PrePurchaseId)}");
+}
+
 @foreach (var set in Model.Sets.Take(80))
 {
     <button type="button" class="set-pick-item"
-            hx-get="/partials/add-to-collection/cards"
+            hx-get="/partials/add-to-collection/cards?setId=@Uri.EscapeDataString(set.Id)@pre"
             hx-target="#add-collection-host"
-            hx-swap="innerHTML"
-            hx-vals='{"setId":"@set.Id"}'>
+            hx-swap="innerHTML">
         @if (set.Logo is not null)
         {
             <img class="set-pick-logo" src="@(set.Logo + ".webp")" alt="" onerror="this.style.display='none'" />

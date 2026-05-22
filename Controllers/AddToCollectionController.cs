@@ -17,35 +17,35 @@ public class AddToCollectionController(
     PurchaseService purchaseSvc) : Controller
 {
     [HttpGet("sets")]
-    public async Task<IActionResult> Sets(string? q)
+    public async Task<IActionResult> Sets(string? q, string? preListId, string? prePurchaseId)
     {
-        var vm = await BuildSetsViewModel(q);
+        var vm = await BuildSetsViewModel(q, preListId, prePurchaseId);
         return PartialView("~/Views/AddToCollection/_Sets.cshtml", vm);
     }
 
     [HttpGet("sets-results")]
-    public async Task<IActionResult> SetsResults(string? q)
+    public async Task<IActionResult> SetsResults(string? q, string? preListId, string? prePurchaseId)
     {
-        var vm = await BuildSetsViewModel(q);
+        var vm = await BuildSetsViewModel(q, preListId, prePurchaseId);
         return PartialView("~/Views/AddToCollection/_SetResults.cshtml", vm);
     }
 
     [HttpGet("cards")]
-    public async Task<IActionResult> Cards(string setId, string? q)
+    public async Task<IActionResult> Cards(string setId, string? q, string? preListId, string? prePurchaseId)
     {
-        var vm = await BuildCardsViewModel(setId, q);
+        var vm = await BuildCardsViewModel(setId, q, preListId, prePurchaseId);
         return PartialView("~/Views/AddToCollection/_Cards.cshtml", vm);
     }
 
     [HttpGet("cards-results")]
-    public async Task<IActionResult> CardsResults(string setId, string? q)
+    public async Task<IActionResult> CardsResults(string setId, string? q, string? preListId, string? prePurchaseId)
     {
-        var vm = await BuildCardsViewModel(setId, q);
+        var vm = await BuildCardsViewModel(setId, q, preListId, prePurchaseId);
         return PartialView("~/Views/AddToCollection/_CardResults.cshtml", vm);
     }
 
     [HttpGet("configure")]
-    public async Task<IActionResult> Configure(string cardId)
+    public async Task<IActionResult> Configure(string cardId, string? preListId, string? prePurchaseId)
     {
         var idx     = cardId.LastIndexOf('-');
         var setId   = idx > 0 ? cardId[..idx]    : cardId;
@@ -66,7 +66,8 @@ public class AddToCollectionController(
 
         return PartialView("~/Views/AddToCollection/_Configure.cshtml",
             new AddToCollectionConfigureViewModel(card, detailTask.Result, variants,
-                locsTask.Result, purchasesTask.Result, linkedTask.Result, standardLists));
+                locsTask.Result, purchasesTask.Result, linkedTask.Result, standardLists,
+                preListId, prePurchaseId));
     }
 
     [HttpPost("submit")]
@@ -79,7 +80,6 @@ public class AddToCollectionController(
             ? CollectionDbContext.DefaultLocationId : req.LocationId;
         var purchaseId = string.IsNullOrEmpty(req.PurchaseId) ? null : req.PurchaseId;
 
-        // Validate purchase capacity before creating any instances
         if (purchaseId is not null)
         {
             var purchases     = await purchaseSvc.GetAllAsync();
@@ -91,12 +91,12 @@ public class AddToCollectionController(
             if (remaining <= 0)
             {
                 this.ToastError("That purchase has no remaining slots.");
-                return await ReturnToConfigure(req);
+                return await Configure(req.CardId, null, purchaseId);
             }
             if (req.Quantity > remaining)
             {
                 this.ToastError($"That purchase only has {remaining} slot{(remaining == 1 ? "" : "s")} remaining.");
-                return await ReturnToConfigure(req);
+                return await Configure(req.CardId, null, purchaseId);
             }
         }
 
@@ -107,20 +107,15 @@ public class AddToCollectionController(
         foreach (var wl in wishlists)
             await listSvc.FulfillWishlistAsync(wl.Id);
 
-        // Compute updated chips for OOB update on the card grid
         var variantCounts = await collection.GetVariantCountsForCardAsync(req.CardId);
-
         this.ToastSuccess($"Added {req.Quantity} × {(req.Variant == "FirstEdition" ? "1st Edition" : req.Variant)} to your collection.");
         return PartialView("~/Views/AddToCollection/_Success.cshtml",
             new AddToCollectionSuccessViewModel(req.CardId, req.Quantity, req.Variant, variantCounts));
     }
 
-    private async Task<IActionResult> ReturnToConfigure(AddToCollectionRequest req)
-        => await Configure(req.CardId);
-
     // ── Helpers ───────────────────────────────────────────────────────────
 
-    private async Task<AddToCollectionSetsViewModel> BuildSetsViewModel(string? q)
+    private async Task<AddToCollectionSetsViewModel> BuildSetsViewModel(string? q, string? preListId, string? prePurchaseId)
     {
         var allSets = await tcgDex.GetSetsAsync();
         var flat    = SetGrouping.Build(allSets).SelectMany(g => g.Sets).ToList();
@@ -135,10 +130,10 @@ public class AddToCollectionController(
                 s.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
                 s.Id.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
 
-        return new AddToCollectionSetsViewModel(q ?? "", flat, ownedSetIds);
+        return new AddToCollectionSetsViewModel(q ?? "", flat, ownedSetIds, preListId, prePurchaseId);
     }
 
-    private async Task<AddToCollectionPickViewModel> BuildCardsViewModel(string setId, string? q)
+    private async Task<AddToCollectionPickViewModel> BuildCardsViewModel(string setId, string? q, string? preListId, string? prePurchaseId)
     {
         var setTask    = tcgDex.GetSetAsync(setId);
         var countsTask = collection.GetCountsAsync();
@@ -151,6 +146,6 @@ public class AddToCollectionController(
                 c.LocalId.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
 
         return new AddToCollectionPickViewModel(setId, setTask.Result?.Name ?? setId,
-            q ?? "", cards, countsTask.Result);
+            q ?? "", cards, countsTask.Result, preListId, prePurchaseId);
     }
 }

@@ -1,6 +1,11 @@
 @using ClintCardShop.Models
 @model AddToCollectionSetsViewModel
 
+@{
+    var pre = (string.IsNullOrEmpty(Model.PreListId) ? "" : $"&preListId={Uri.EscapeDataString(Model.PreListId)}")
+            + (string.IsNullOrEmpty(Model.PrePurchaseId) ? "" : $"&prePurchaseId={Uri.EscapeDataString(Model.PrePurchaseId)}");
+}
+
 <div class="modal-overlay" onclick="closeAddCollection()">
     <div class="modal-panel" onclick="event.stopPropagation()" style="max-width:580px">
         <button class="modal-close" onclick="closeAddCollection()">&#10005;</button>
@@ -16,7 +21,7 @@
                    placeholder="Search sets&hellip;"
                    autocomplete="off"
                    style="width:100%;margin-bottom:.75rem"
-                   hx-get="/partials/add-to-collection/sets-results"
+                   hx-get="/partials/add-to-collection/sets-results?@Html.Raw(pre.TrimStart('&'))"
                    hx-trigger="input delay:300ms"
                    hx-target="#atc-sets-list"
                    hx-swap="innerHTML"

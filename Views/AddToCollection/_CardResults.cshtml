@@ -1,14 +1,18 @@
 @using ClintCardShop.Models
 @model AddToCollectionPickViewModel
 
+@{
+    var pre = (string.IsNullOrEmpty(Model.PreListId) ? "" : $"&preListId={Uri.EscapeDataString(Model.PreListId)}")
+            + (string.IsNullOrEmpty(Model.PrePurchaseId) ? "" : $"&prePurchaseId={Uri.EscapeDataString(Model.PrePurchaseId)}");
+}
+
 @foreach (var card in Model.Cards)
 {
     var owned = Model.OwnedCounts.GetValueOrDefault(card.Id, 0);
     <div class="card-tile" style="cursor:pointer"
-         hx-get="/partials/add-to-collection/configure"
+         hx-get="/partials/add-to-collection/configure?cardId=@Uri.EscapeDataString(card.Id)@pre"
          hx-target="#add-collection-host"
-         hx-swap="innerHTML"
-         hx-vals='{"cardId":"@card.Id"}'>
+         hx-swap="innerHTML">
         <div class="card-image-wrap">
             @if (card.Image is not null)
             {

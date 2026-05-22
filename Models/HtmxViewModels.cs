@@ -7,7 +7,9 @@ namespace ClintCardShop.Models;
 public record AddToCollectionSetsViewModel(
     string Query,
     List<SetBrief> Sets,
-    HashSet<string> OwnedSetIds
+    HashSet<string> OwnedSetIds,
+    string? PreListId = null,
+    string? PrePurchaseId = null
 );
 
 public record AddToCollectionPickViewModel(
@@ -15,7 +17,9 @@ public record AddToCollectionPickViewModel(
     string SetName,
     string Query,
     List<CardBrief> Cards,
-    Dictionary<string, int> OwnedCounts  // cardId → total instances owned
+    Dictionary<string, int> OwnedCounts,
+    string? PreListId = null,
+    string? PrePurchaseId = null
 );
 
 public record AddToCollectionConfigureViewModel(
@@ -24,8 +28,10 @@ public record AddToCollectionConfigureViewModel(
     List<string> Variants,
     List<Location> Locations,
     List<Purchase> Purchases,
-    Dictionary<string, int> LinkedQty,  // purchaseId → already linked instance count
-    List<CardList> StandardLists
+    Dictionary<string, int> LinkedQty,
+    List<CardList> StandardLists,
+    string? PreListId = null,
+    string? PrePurchaseId = null
 );
 
 public record AddToCollectionSuccessViewModel(
@@ -101,35 +107,6 @@ public record ListSharePanelViewModel(
     string ShareUrl
 );
 
-public record AddCardSetsViewModel(
-    string Context,
-    string CtxId,
-    string Query,
-    List<SetBrief> Sets,
-    HashSet<string> OwnedSetIds
-);
-
-public record AddCardPickViewModel(
-    string Context,
-    string CtxId,
-    string SetId,
-    string SetName,
-    List<CardBrief> Cards,
-    Dictionary<string, int> CollectionCounts,
-    string? SuccessMsg
-);
-
-public record AddCardConfigureViewModel(
-    string Context,
-    string CtxId,
-    CardBrief Card,
-    CardDetail? Detail,
-    List<string> Variants,
-    List<Location> Locations,
-    int MaxCount,
-    bool IsWishlist
-);
-
 public record PurchaseCardsPanelViewModel(
     Purchase Purchase,
     List<(CardBrief Card, int Count)> CardBriefs,
@@ -182,16 +159,6 @@ public record ModalPurchasesTabViewModel(
     List<Location> Locations,
     int TotalOwned
 );
-
-public class AddCardSubmitRequest
-{
-    public string Context { get; set; } = "";
-    public string CtxId { get; set; } = "";
-    public string CardId { get; set; } = "";
-    public string Variant { get; set; } = "Normal";
-    public string LocationId { get; set; } = CollectionDbContext.DefaultLocationId;
-    public int Count { get; set; } = 1;
-}
 
 public class CollectionAdjustRequest
 {

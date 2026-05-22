@@ -4,14 +4,15 @@
 @model CardModalViewModel
 
 @{
-    var detail = Model.Detail;
-    var card   = Model.Card;
-    var cardId = detail?.Id ?? card?.Id ?? "";
-    var name   = detail?.Name ?? card?.Name ?? "";
-    var imgSrc = detail?.Image ?? card?.Image;
-    var variants = PartialsController.AvailableVariants(detail);
-    var total = Model.LocationCounts.Values.Sum();
-    var count = Model.LocationCounts.GetValueOrDefault($"0:{variants[0]}");
+    var detail     = Model.Detail;
+    var card       = Model.Card;
+    var cardId     = detail?.Id ?? card?.Id ?? "";
+    var name       = detail?.Name ?? card?.Name ?? "";
+    var imgSrc     = detail?.Image ?? card?.Image;
+    var variants   = PartialsController.AvailableVariants(detail);
+    var total      = Model.LocationCounts.Values.Sum();
+    var count      = Model.LocationCounts.GetValueOrDefault($"0:{variants[0]}");
+    var isAuth     = User.Identity?.IsAuthenticated == true;
 }
 
 <div class="modal-overlay" onclick="closeModal()">
@@ -59,21 +60,24 @@
                             hx-target="#modal-tab-content"
                             hx-swap="innerHTML"
                             onclick="activateTab(this)">Info</button>
-                    <button class="modal-tab"
-                            hx-get="/partials/modal-tab/@cardId/collection"
-                            hx-target="#modal-tab-content"
-                            hx-swap="innerHTML"
-                            onclick="activateTab(this)">Collection</button>
-                    <button class="modal-tab"
-                            hx-get="/partials/modal-tab/@cardId/lists"
-                            hx-target="#modal-tab-content"
-                            hx-swap="innerHTML"
-                            onclick="activateTab(this)">Lists</button>
-                    <button class="modal-tab"
-                            hx-get="/partials/modal-tab/@cardId/purchases"
-                            hx-target="#modal-tab-content"
-                            hx-swap="innerHTML"
-                            onclick="activateTab(this)">Purchases</button>
+                    @if (isAuth)
+                    {
+                        <button class="modal-tab"
+                                hx-get="/partials/modal-tab/@cardId/collection"
+                                hx-target="#modal-tab-content"
+                                hx-swap="innerHTML"
+                                onclick="activateTab(this)">Collection</button>
+                        <button class="modal-tab"
+                                hx-get="/partials/modal-tab/@cardId/lists"
+                                hx-target="#modal-tab-content"
+                                hx-swap="innerHTML"
+                                onclick="activateTab(this)">Lists</button>
+                        <button class="modal-tab"
+                                hx-get="/partials/modal-tab/@cardId/purchases"
+                                hx-target="#modal-tab-content"
+                                hx-swap="innerHTML"
+                                onclick="activateTab(this)">Purchases</button>
+                    }
                 </div>
 
                 <div id="modal-tab-content">

@@ -2,6 +2,11 @@
 @using ClintCardShop.Models
 @model AddToCollectionPickViewModel
 
+@{
+    var pre = (string.IsNullOrEmpty(Model.PreListId) ? "" : $"&preListId={Uri.EscapeDataString(Model.PreListId)}")
+            + (string.IsNullOrEmpty(Model.PrePurchaseId) ? "" : $"&prePurchaseId={Uri.EscapeDataString(Model.PrePurchaseId)}");
+}
+
 <div class="modal-overlay" onclick="closeAddCollection()">
     <div class="modal-panel" onclick="event.stopPropagation()" style="max-width:700px">
         <button class="modal-close" onclick="closeAddCollection()">&#10005;</button>
@@ -9,7 +14,7 @@
             <h2 class="modal-card-name" style="font-size:1.1rem;margin-bottom:.75rem">Add Card to Collection</h2>
             <div class="step-header" style="margin-bottom:.75rem">
                 <button type="button" class="btn-cancel"
-                        hx-get="/partials/add-to-collection/sets"
+                        hx-get="/partials/add-to-collection/sets?@Html.Raw(pre.TrimStart('&'))"
                         hx-target="#add-collection-host"
                         hx-swap="innerHTML">&#8592; Back</button>
                 <span class="step-title">@Model.SetName</span>
@@ -21,11 +26,10 @@
                    placeholder="Search cards&hellip;"
                    autocomplete="off"
                    style="width:100%;margin-bottom:.75rem"
-                   hx-get="/partials/add-to-collection/cards-results"
+                   hx-get="/partials/add-to-collection/cards-results?setId=@Uri.EscapeDataString(Model.SetId)@pre"
                    hx-trigger="input delay:300ms"
                    hx-target="#atc-cards-grid"
                    hx-swap="innerHTML"
-                   hx-vals='{"setId":"@Model.SetId"}'
                    hx-include="this" />
             <div id="atc-cards-grid" class="card-grid" style="max-height:440px;overflow-y:auto">
                 <partial name="~/Views/AddToCollection/_CardResults.cshtml" model="Model" />

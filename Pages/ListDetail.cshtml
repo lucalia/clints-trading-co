@@ -25,9 +25,10 @@ else
             @if (Model.List.Type == "Wishlist") { <span class="list-type-badge">Wishlist</span> }
             <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center">
                 <button class="btn-add" style="padding:.35rem .85rem;font-size:.85rem"
-                        hx-get="/partials/add-card/sets?context=list&ctxId=@Model.List.Id"
-                        hx-target="#add-card-panel"
-                        hx-swap="innerHTML">+ Add Card</button>
+                        hx-get="/partials/add-to-collection/sets?preListId=@Uri.EscapeDataString(Model.List.Id)"
+                        hx-target="#add-collection-host"
+                        hx-swap="innerHTML"
+                        onclick="window.lockScroll()">+ Add Card</button>
                 <button class="btn-share @(Model.List.ShareToken is not null ? "active" : "")"
                         hx-post="/partials/list/@Model.List.Id/share"
                         hx-target="#share-panel"
@@ -51,7 +52,6 @@ else
             }
         </div>
 
-        <div id="add-card-panel"></div>
 
         @if (Model.FulfillMsg is not null)
         {

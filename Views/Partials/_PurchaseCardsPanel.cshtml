@@ -22,13 +22,12 @@
         @if (!reconciled)
         {
             <button class="btn-add" style="padding:.3rem .75rem;font-size:.8rem"
-                    hx-get="/partials/add-card/sets?context=purchase&ctxId=@Model.Purchase.Id"
-                    hx-target="#add-card-panel"
-                    hx-swap="innerHTML">+ Link Card</button>
+                    hx-get="/partials/add-to-collection/sets?prePurchaseId=@Uri.EscapeDataString(Model.Purchase.Id)"
+                    hx-target="#add-collection-host"
+                    hx-swap="innerHTML"
+                    onclick="window.lockScroll()">+ Link Card</button>
         }
     </div>
-
-    <div id="add-card-panel"></div>
 
     @if (Model.CardBriefs.Count == 0)
     {
