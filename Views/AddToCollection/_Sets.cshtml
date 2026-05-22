@@ -1,0 +1,29 @@
+@using ClintCardShop.Models
+@model AddToCollectionSetsViewModel
+
+<div class="modal-overlay" onclick="closeAddCollection()">
+    <div class="modal-panel" onclick="event.stopPropagation()" style="max-width:580px">
+        <button class="modal-close" onclick="closeAddCollection()">&#10005;</button>
+        <div style="padding:1.5rem">
+            <h2 class="modal-card-name" style="font-size:1.1rem;margin-bottom:.75rem">Add Card to Collection</h2>
+            <div class="step-header" style="margin-bottom:.75rem">
+                <span class="step-title">Step 1: Pick a Set</span>
+            </div>
+            <input class="loc-input"
+                   type="text"
+                   name="q"
+                   value="@Model.Query"
+                   placeholder="Search sets&hellip;"
+                   autocomplete="off"
+                   style="width:100%;margin-bottom:.75rem"
+                   hx-get="/partials/add-to-collection/sets-results"
+                   hx-trigger="input delay:300ms"
+                   hx-target="#atc-sets-list"
+                   hx-swap="innerHTML"
+                   hx-include="this" />
+            <div id="atc-sets-list" class="set-pick-list" style="max-height:420px">
+                <partial name="~/Views/AddToCollection/_SetResults.cshtml" model="Model" />
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,32 @@
+@using ClintCardShop.Models
+@model AddToCollectionPickViewModel
+
+@foreach (var card in Model.Cards)
+{
+    var owned = Model.OwnedCounts.GetValueOrDefault(card.Id, 0);
+    <div class="card-tile" style="cursor:pointer"
+         hx-get="/partials/add-to-collection/configure"
+         hx-target="#add-collection-host"
+         hx-swap="innerHTML"
+         hx-vals='{"cardId":"@card.Id"}'>
+        <div class="card-image-wrap">
+            @if (card.Image is not null)
+            {
+                <img class="card-image" src="@(card.Image + "/low.webp")" alt="@card.Name"
+                     loading="lazy"
+                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+                <div class="card-image-placeholder" style="display:none">?</div>
+            }
+            else { <div class="card-image-placeholder">?</div> }
+            @if (owned > 0)
+            {
+                <div class="collection-badge">&#215;@owned</div>
+            }
+        </div>
+        <div class="card-tile-footer">
+            <span class="card-tile-name">@card.Name</span>
+            <span class="card-tile-id">#@card.LocalId</span>
+        </div>
+    </div>
+}
+@if (!Model.Cards.Any()) { <div class="loc-empty">No cards match.</div> }

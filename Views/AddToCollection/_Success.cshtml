@@ -1,0 +1,30 @@
+@using ClintCardShop.Controllers
+@model ClintCardShop.Models.AddToCollectionSuccessViewModel
+
+<div class="modal-overlay" onclick="closeAddCollection()">
+    <div class="modal-panel" onclick="event.stopPropagation()" style="max-width:400px;text-align:center">
+        <button class="modal-close" onclick="closeAddCollection()">&#10005;</button>
+        <div style="padding:1.5rem">
+            <div style="font-size:2rem;margin-bottom:.75rem">&#10003;</div>
+            <h2 style="font-size:1.05rem;margin-bottom:.4rem">Added to Collection</h2>
+            <p style="color:var(--text2);font-size:.88rem">
+                @Model.Quantity &times; @(Model.Variant == "FirstEdition" ? "1st Edition" : Model.Variant)
+            </p>
+            <div style="display:flex;gap:.75rem;justify-content:center;margin-top:1.25rem">
+                <button class="btn-add"
+                        hx-get="/partials/add-to-collection/sets"
+                        hx-target="#add-collection-host"
+                        hx-swap="innerHTML">Add Another</button>
+                <button class="btn-cancel" onclick="closeAddCollection()">Done</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* OOB: update variant chips on the set page card grid if it's visible *@
+<div id="chips-@Model.CardId" hx-swap-oob="true" class="card-variant-overlay">
+    @foreach (var (variant, count) in Model.VariantCounts.Where(kv => kv.Value > 0).OrderBy(kv => kv.Key))
+    {
+        <span class="variant-chip">@PartialsController.VariantShort(variant) &#215;@count</span>
+    }
+</div>

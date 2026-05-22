@@ -1376,6 +1376,37 @@ a:hover { text-decoration: underline; }
 #blazor-error-ui .reload { color: white; font-weight: bold; margin: 0 .5rem; }
 #blazor-error-ui .dismiss { cursor: pointer; float: right; }
 
+/* ─── Toast notifications ───────────────────────────────────────────── */
+#toast-container {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    pointer-events: none;
+}
+.toast {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: .65rem 1.1rem;
+    font-size: .88rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,.55);
+    pointer-events: auto;
+    animation: toastIn .2s ease;
+    max-width: 360px;
+    line-height: 1.4;
+}
+.toast-success { border-color: var(--accent2); color: var(--accent2); }
+.toast-error   { border-color: var(--red);     color: var(--red); }
+.toast-warning { border-color: #f0a030;         color: #f0a030; }
+.toast-info    { border-color: var(--accent);   color: var(--accent); }
+.toast-out     { animation: toastOut .25s ease forwards; }
+@keyframes toastIn  { from { opacity:0; transform:translateY(12px); } }
+@keyframes toastOut { to   { opacity:0; transform:translateY(12px); } }
+
 /* ─── Responsive ────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
     .modal-panel { max-width: calc(100vw - 2rem); }

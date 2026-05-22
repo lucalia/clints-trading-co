@@ -26,12 +26,20 @@
                 <a class="@Nav("/Locations")" href="/locations">Locations</a>
                 <a class="@Nav("/Lists")" href="/lists">Lists</a>
                 <a class="@Nav("/Purchases")" href="/purchases">Purchases</a>
+                <button class="btn-add"
+                        style="padding:.3rem .85rem;font-size:.82rem;margin-right:.25rem"
+                        hx-get="/partials/add-to-collection/sets"
+                        hx-target="#add-collection-host"
+                        hx-swap="innerHTML"
+                        onclick="window.lockScroll()">+ Add Card</button>
                 <a class="nav-link nav-signout" href="/logout">Sign out</a>
             </nav>
         </div>
     </header>
+    <div id="toast-container"></div>
     <main class="app-main">
         <div id="modal-host"></div>
+        <div id="add-collection-host"></div>
         @RenderBody()
     </main>
     <footer class="app-footer">

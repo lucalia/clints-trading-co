@@ -33,6 +33,31 @@ window.unlockScroll = function () {
     document.body.style.overflow = '';
 };
 
+// ── Toast system ─────────────────────────────────────────────────────────
+window.showToast = function (message, type) {
+    type = type || 'info';
+    var container = document.getElementById('toast-container');
+    if (!container || !message) return;
+    var el = document.createElement('div');
+    el.className = 'toast toast-' + type;
+    el.textContent = message;
+    container.appendChild(el);
+    setTimeout(function () {
+        el.classList.add('toast-out');
+        setTimeout(function () { el.remove(); }, 280);
+    }, 4000);
+};
+
+document.addEventListener('showToast', function (evt) {
+    var d = evt.detail || {};
+    window.showToast(d.message, d.type);
+});
+
+window.closeAddCollection = function () {
+    document.getElementById('add-collection-host').innerHTML = '';
+    window.unlockScroll();
+};
+
 window.closeModal = function () {
     document.getElementById('modal-host').innerHTML = '';
     window.unlockScroll();
@@ -76,6 +101,9 @@ window.setCollectionVariant = function (btn, variant) {
 
 document.addEventListener('htmx:afterSwap', function (evt) {
     if (evt.target && evt.target.id === 'modal-host' && evt.target.innerHTML.trim()) {
+        window.lockScroll();
+    }
+    if (evt.target && evt.target.id === 'add-collection-host' && evt.target.innerHTML.trim()) {
         window.lockScroll();
     }
 });

@@ -186,14 +186,48 @@ public class PartialsController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ModalPurchaseSubmitLink(string cardId, [FromForm] ModalLinkPurchaseRequest req)
     {
-        req.CardId = cardId;
-        if (!string.IsNullOrEmpty(req.PurchaseId) && req.Qty > 0)
+        if (string.IsNullOrEmpty(req.PurchaseId) || req.Qty <= 0)
+            return await ModalTabPurchases(cardId);
+
+        // Check purchase has enough remaining capacity
+        var purchases        = await purchaseSvc.GetAllAsync();
+        var purchase         = purchases.FirstOrDefault(p => p.Id == req.PurchaseId);
+        var linkedCounts     = await purchaseSvc.GetLinkedCountsPerPurchaseAsync();
+        var alreadyLinked    = linkedCounts.TryGetValue(req.PurchaseId, out var lc) ? lc : 0;
+        var remainingSlots   = purchase is not null ? purchase.Quantity - alreadyLinked : 0;
+
+        if (remainingSlots <= 0)
         {
-            for (int i = 0; i < req.Qty; i++)
-            {
-                var inst = await collection.AddInstanceAsync(cardId, req.Variant, req.LocationId, req.PurchaseId, Array.Empty<string>());
-            }
+            this.ToastError("That purchase has no remaining slots.");
+            return await ModalTabPurchases(cardId);
         }
+        if (req.Qty > remainingSlots)
+        {
+            this.ToastError($"Only {remainingSlots} slot{(remainingSlots == 1 ? "" : "s")} remaining in that purchase.");
+            return await ModalTabPurchases(cardId);
+        }
+
+        // Check user has enough unlinked instances of this card+variant
+        var instances   = await collection.GetByCardAsync(cardId);
+        var available   = instances.Where(i => i.Variant == req.Variant && i.PurchaseId == null).ToList();
+
+        if (available.Count == 0)
+        {
+            this.ToastError($"You have no unlinked {req.Variant} copies of this card in your collection.");
+            return await ModalTabPurchases(cardId);
+        }
+        if (req.Qty > available.Count)
+        {
+            this.ToastWarning($"Only {available.Count} unlinked {req.Variant} {(available.Count == 1 ? "copy" : "copies")} available — linked {available.Count}.");
+            foreach (var inst in available)
+                await purchaseSvc.LinkInstanceAsync(inst.Id, req.PurchaseId);
+            return await ModalTabPurchases(cardId);
+        }
+
+        foreach (var inst in available.Take(req.Qty))
+            await purchaseSvc.LinkInstanceAsync(inst.Id, req.PurchaseId);
+
+        this.ToastSuccess($"Linked {req.Qty} {req.Variant} {(req.Qty == 1 ? "copy" : "copies")} to purchase.");
         return await ModalTabPurchases(cardId);
     }
 

@@ -2,6 +2,49 @@ using ClintCardShop.Data;
 
 namespace ClintCardShop.Models;
 
+// ── Add to Collection flow ────────────────────────────────────────────────
+
+public record AddToCollectionSetsViewModel(
+    string Query,
+    List<SetBrief> Sets,
+    HashSet<string> OwnedSetIds
+);
+
+public record AddToCollectionPickViewModel(
+    string SetId,
+    string SetName,
+    string Query,
+    List<CardBrief> Cards,
+    Dictionary<string, int> OwnedCounts  // cardId → total instances owned
+);
+
+public record AddToCollectionConfigureViewModel(
+    CardBrief Card,
+    CardDetail? Detail,
+    List<string> Variants,
+    List<Location> Locations,
+    List<Purchase> Purchases,
+    Dictionary<string, int> LinkedQty,  // purchaseId → already linked instance count
+    List<CardList> StandardLists
+);
+
+public record AddToCollectionSuccessViewModel(
+    string CardId,
+    int Quantity,
+    string Variant,
+    Dictionary<string, int> VariantCounts  // variant → count, for OOB chip update
+);
+
+public class AddToCollectionRequest
+{
+    public string CardId    { get; set; } = "";
+    public string Variant   { get; set; } = "Normal";
+    public string LocationId { get; set; } = CollectionDbContext.DefaultLocationId;
+    public int    Quantity  { get; set; } = 1;
+    public string? PurchaseId { get; set; }
+    public List<string> ListIds { get; set; } = new();
+}
+
 public record SetsSearchModel(
     string Query,
     List<(string Serie, List<SetBrief> Sets)> Groups,

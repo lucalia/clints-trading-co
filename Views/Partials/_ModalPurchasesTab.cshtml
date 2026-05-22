@@ -4,6 +4,22 @@
 
 @{
     var totalLinked = Model.CardPurchases.Count;
+
+    // Aggregate: (Purchase, Variant) → count + location summary
+    var grouped = Model.CardPurchases
+        .GroupBy(x => (x.P.Id, x.Instance.Variant))
+        .Select(g => (
+            Purchase: g.First().P,
+            Variant:  g.Key.Variant,
+            Count:    g.Count(),
+            Locations: g.Select(x => x.Instance.LocationId).Distinct()
+                        .Select(lid => lid == CollectionDbContext.DefaultLocationId
+                            ? "Collection"
+                            : (Model.Locations.FirstOrDefault(l => l.Id == lid)?.Name ?? "?"))
+                        .ToList()
+        ))
+        .OrderByDescending(x => x.Purchase.PurchasedAt)
+        .ToList();
 }
 
 <div class="collection-section">
@@ -30,35 +46,32 @@
         </div>
     }
 
-    @if (!Model.CardPurchases.Any())
+    @if (!grouped.Any())
     {
         <div class="loc-empty" style="padding:.5rem 0;text-align:left;font-size:.82rem">Not linked to any purchase yet.</div>
     }
     else
     {
         <div class="loc-assignments">
-            @foreach (var (purchase, instance) in Model.CardPurchases)
+            @foreach (var row in grouped)
             {
-                var perCard  = purchase.Quantity > 0 ? purchase.TotalCost / purchase.Quantity : 0;
-                var locName  = instance.LocationId == ClintCardShop.Data.CollectionDbContext.DefaultLocationId
-                    ? "Collection"
-                    : (Model.Locations.FirstOrDefault(l => l.Id == instance.LocationId)?.Name ?? "?");
+                var perCard = row.Purchase.Quantity > 0 ? row.Purchase.TotalCost / row.Purchase.Quantity : 0;
                 <div class="loc-assignment-row" style="align-items:flex-start">
                     <div style="min-width:0;flex:1">
                         <div style="font-weight:600;font-size:.82rem">
-                            @purchase.PurchasedAt.ToString("MMM d, yyyy") &mdash; @purchase.Source
+                            @row.Purchase.PurchasedAt.ToString("MMM d, yyyy") &mdash; @row.Purchase.Source
                         </div>
-                        <div style="font-size:.75rem;color:var(--text2)">@purchase.Description</div>
+                        <div style="font-size:.75rem;color:var(--text2)">@row.Purchase.Description</div>
                         <div style="font-size:.72rem;color:var(--accent2);margin-top:.1rem">
                             $@perCard.ToString("F3") lot avg
                         </div>
-                        <div style="font-size:.7rem;color:var(--text2)">Location: @locName</div>
+                        <div style="font-size:.7rem;color:var(--text2)">@string.Join(", ", row.Locations)</div>
                     </div>
                     <div style="display:flex;align-items:center;gap:.3rem;flex-shrink:0">
-                        <span class="variant-chip">@PartialsController.VariantShort(instance.Variant)</span>
-                        @if (!string.IsNullOrWhiteSpace(purchase.ReceiptUrl))
+                        <span class="variant-chip">@PartialsController.VariantShort(row.Variant) &#215;@row.Count</span>
+                        @if (!string.IsNullOrWhiteSpace(row.Purchase.ReceiptUrl))
                         {
-                            <a href="@purchase.ReceiptUrl" target="_blank" rel="noopener"
+                            <a href="@row.Purchase.ReceiptUrl" target="_blank" rel="noopener"
                                class="purchase-receipt-link" style="font-size:.72rem">↗</a>
                         }
                     </div>
