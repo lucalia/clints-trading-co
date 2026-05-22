@@ -1,0 +1,22 @@
+@using ClintCardShop.Data
+@model Purchase
+
+<div class="purchase-card-body">
+    <div class="purchase-numbers">
+        <span>@Model.PurchasedAt.ToString("MMMM d, yyyy")</span>
+        <span>&bull;</span>
+        <span>@Model.Source</span>
+        <span>&bull;</span>
+        <span>Total: <strong>$@Model.TotalCost.ToString("F2")</strong></span>
+        <span>Cards: <strong>@Model.Quantity.ToString("N0")</strong></span>
+        <span>Per card: <strong>$@(Model.Quantity > 0 ? (Model.TotalCost / Model.Quantity).ToString("F3") : "—")</strong></span>
+        @if (!string.IsNullOrWhiteSpace(Model.ReceiptUrl))
+        {
+            <a href="@Model.ReceiptUrl" target="_blank" rel="noopener" class="purchase-receipt-link">View Receipt ↗</a>
+        }
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Model.Notes))
+    {
+        <div class="purchase-notes">@Model.Notes</div>
+    }
+</div>

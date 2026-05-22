@@ -1,0 +1,45 @@
+@using ClintCardShop.Models
+@model AddCardSetsViewModel
+
+<div class="add-card-panel">
+    <div class="step-header">
+        <span class="step-title">Pick a Set</span>
+        <button type="button" class="btn-cancel" onclick="document.getElementById('add-card-panel').innerHTML=''">Cancel</button>
+    </div>
+    <input class="loc-input add-card-search"
+           type="text"
+           name="q"
+           placeholder="Search sets&hellip;"
+           value="@Model.Query"
+           autocomplete="off"
+           hx-get="/partials/add-card/sets"
+           hx-trigger="input delay:300ms"
+           hx-target="#add-card-panel"
+           hx-swap="innerHTML"
+           hx-vals='{"context":"@Model.Context","ctxId":@Model.CtxId}'
+           hx-include="this" />
+    <div class="set-pick-list">
+        @foreach (var set in Model.Sets.Take(60))
+        {
+            <button type="button" class="set-pick-item"
+                    hx-get="/partials/add-card/cards"
+                    hx-target="#add-card-panel"
+                    hx-swap="innerHTML"
+                    hx-vals='{"context":"@Model.Context","ctxId":@Model.CtxId,"setId":"@set.Id"}'>
+                @if (set.Logo is not null)
+                {
+                    <img class="set-pick-logo" src="@(set.Logo + ".webp")" alt="" onerror="this.style.display='none'" />
+                }
+                <span>@set.Name</span>
+                @if (Model.OwnedSetIds.Contains(set.Id))
+                {
+                    <span class="list-shared-badge" style="margin-left:auto">Owned</span>
+                }
+            </button>
+        }
+        @if (!Model.Sets.Any())
+        {
+            <div class="loc-empty" style="padding:.75rem 0">No sets match your search.</div>
+        }
+    </div>
+</div>

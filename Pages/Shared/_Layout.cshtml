@@ -1,0 +1,52 @@
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@{
+    var page = ViewContext.RouteData.Values["page"]?.ToString() ?? "";
+    string Nav(string p) => page.StartsWith(p) ? "nav-link active" : "nav-link";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@(ViewData["Title"] != null ? ViewData["Title"] + " — " : "")Clint's Trading Co.</title>
+    <meta name="__RequestVerificationToken" content="@Antiforgery.GetAndStoreTokens(Context).RequestToken" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="icon" type="image/png" href="~/favicon.png" />
+</head>
+<body>
+<div class="app-shell">
+    <header class="app-header">
+        <div class="header-content">
+            <div class="header-brand">
+                <img src="/img/logo.png" class="brand-logo" alt="Clint's Trading Co." />
+                <span class="brand-title">Clint's Trading Co.</span>
+            </div>
+            <nav class="header-nav">
+                <a class="@(page == "/Index" ? "nav-link active" : "nav-link")" href="/">Sets</a>
+                <a class="@Nav("/Locations")" href="/locations">Locations</a>
+                <a class="@Nav("/Lists")" href="/lists">Lists</a>
+                <a class="@Nav("/Purchases")" href="/purchases">Purchases</a>
+                <button class="btn-add"
+                        style="padding:.3rem .85rem;font-size:.82rem;margin-right:.25rem"
+                        hx-get="/partials/add-to-collection/sets"
+                        hx-target="#add-collection-host"
+                        hx-swap="innerHTML"
+                        onclick="window.lockScroll()">+ Add Card</button>
+                <a class="nav-link nav-signout" href="/logout">Sign out</a>
+            </nav>
+        </div>
+    </header>
+    <div id="toast-container"></div>
+    <main class="app-main">
+        <div id="modal-host"></div>
+        <div id="add-collection-host"></div>
+        @RenderBody()
+    </main>
+    <footer class="app-footer">
+        Clint's Trading Co. &mdash; Card data via <a href="https://tcgdex.dev" target="_blank" rel="noopener">TCGDex</a>
+    </footer>
+</div>
+<script src="https://unpkg.com/htmx.org@2.0.4" crossorigin="anonymous"></script>
+<script src="~/js/app.js" asp-append-version="true"></script>
+</body>
+</html>

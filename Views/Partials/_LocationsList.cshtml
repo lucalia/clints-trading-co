@@ -1,0 +1,39 @@
+@using ClintCardShop.Models
+@using ClintCardShop.Data
+@model LocationsListViewModel
+
+<div class="location-grid">
+    <div class="location-card">
+        <div class="location-card-header">
+            <a href="/locations/0" class="list-name-link">Collection</a>
+            <span class="list-shared-badge">Default</span>
+        </div>
+        <div class="location-card-footer">
+            <span class="location-count">@(Model.CardCounts.TryGetValue(CollectionDbContext.DefaultLocationId, out var defCount) ? defCount : 0) copies stored</span>
+        </div>
+    </div>
+
+    @foreach (var loc in Model.Locations)
+    {
+        <div class="location-card" id="loc-@loc.Id">
+            <div class="location-card-header">
+                <a href="/locations/@loc.Id" class="list-name-link">@loc.Name</a>
+            </div>
+            <div class="location-card-footer">
+                <span class="location-count">@(Model.CardCounts.TryGetValue(loc.Id, out var locCount) ? locCount : 0) copies stored</span>
+                <div class="location-actions">
+                    <button class="btn-edit"
+                            hx-get="/partials/locations/@loc.Id/edit"
+                            hx-target="#loc-@loc.Id"
+                            hx-swap="outerHTML">Edit</button>
+                    <button class="btn-delete"
+                            hx-post="/partials/locations/@loc.Id/delete"
+                            hx-target="#locations-list"
+                            hx-swap="innerHTML"
+                            hx-include="[name='__RequestVerificationToken']"
+                            onclick="return confirm('Delete @loc.Name?')">Delete</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>

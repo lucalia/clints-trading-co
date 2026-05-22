@@ -1,0 +1,73 @@
+@using ClintCardShop.Controllers
+@using ClintCardShop.Models
+@model AddCardPickViewModel
+
+<div class="add-card-panel">
+    <div class="step-header">
+        <button type="button" class="btn-cancel"
+                hx-get="/partials/add-card/sets"
+                hx-target="#add-card-panel"
+                hx-swap="innerHTML"
+                hx-vals='{"context":"@Model.Context","ctxId":@Model.CtxId}'>&#8592; Back</button>
+        <span class="step-title">@Model.SetName</span>
+        <button type="button" class="btn-cancel" onclick="document.getElementById('add-card-panel').innerHTML=''">Done</button>
+    </div>
+
+    @if (Model.SuccessMsg is not null)
+    {
+        <div class="add-success">@Model.SuccessMsg</div>
+    }
+
+    <input class="loc-input add-card-search"
+           type="text"
+           name="q"
+           placeholder="Search cards&hellip;"
+           autocomplete="off"
+           hx-get="/partials/add-card/cards"
+           hx-trigger="input delay:300ms"
+           hx-target="#add-card-panel"
+           hx-swap="innerHTML"
+           hx-vals='{"context":"@Model.Context","ctxId":@Model.CtxId,"setId":"@Model.SetId"}'
+           hx-include="this" />
+
+    <div class="card-grid" style="margin-top:.75rem">
+        @foreach (var card in Model.Cards)
+        {
+            var chips = Model.CollectionCounts
+                .Where(kv => kv.Key.StartsWith(card.Id + ":") && kv.Value > 0)
+                .Select(kv => (Variant: kv.Key.Split(':')[1], Count: kv.Value))
+                .OrderBy(x => x.Variant)
+                .ToList();
+            var total = chips.Sum(c => c.Count);
+            <div class="card-tile"
+                 style="cursor:pointer"
+                 hx-get="/partials/add-card/configure"
+                 hx-target="#add-card-panel"
+                 hx-swap="innerHTML"
+                 hx-vals='{"context":"@Model.Context","ctxId":@Model.CtxId,"cardId":"@card.Id"}'>
+                <div class="card-image-wrap">
+                    @if (card.Image is not null)
+                    {
+                        <img class="card-image" src="@(card.Image + "/low.webp")" alt="@card.Name" loading="lazy"
+                             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+                        <div class="card-image-placeholder" style="display:none">?</div>
+                    }
+                    else { <div class="card-image-placeholder">?</div> }
+                    @if (chips.Count > 0)
+                    {
+                        <div class="card-variant-overlay">
+                            @foreach (var (v, c) in chips)
+                            { <span class="variant-chip">@PartialsController.VariantShort(v) &#215;@c</span> }
+                        </div>
+                    }
+                    @if (total > 0) { <div class="collection-badge">&#215;@total</div> }
+                </div>
+                <div class="card-tile-footer">
+                    <span class="card-tile-name">@card.Name</span>
+                    <span class="card-tile-id">#@card.LocalId</span>
+                </div>
+            </div>
+        }
+    </div>
+    @if (!Model.Cards.Any()) { <div class="loc-empty">No cards match.</div> }
+</div>

@@ -1,0 +1,37 @@
+@using ClintCardShop.Controllers
+@using ClintCardShop.Data
+@model ClintCardShop.Models.ModalListsTabViewModel
+
+<div class="collection-section">
+    <div class="section-label" style="border:none;padding:0;margin-bottom:.6rem">In My Lists</div>
+    @if (!Model.CardLists.Any())
+    {
+        <div class="loc-empty" style="padding:.75rem 0;text-align:left">Not in any lists yet.</div>
+    }
+    else
+    {
+        <div class="loc-assignments">
+            @foreach (var (list, chips) in Model.CardLists)
+            {
+                <div class="loc-assignment-row">
+                    <div style="display:flex;align-items:center;gap:.4rem;min-width:0">
+                        <a href="/lists/@list.Id"
+                           style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--accent)">@list.Name</a>
+                        @if (list.Type == "Wishlist") { <span class="list-type-badge">Wishlist</span> }
+                    </div>
+                    <div class="card-tile-chips">
+                        @foreach (var (v, c) in chips)
+                        {
+                            <span class="variant-chip">@PartialsController.VariantShort(v) &#215;@c</span>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <button class="btn-add" style="margin-top:.5rem;width:100%"
+            hx-get="/partials/modal-tab/@Model.CardId/lists/add-form"
+            hx-target="#modal-tab-content"
+            hx-swap="innerHTML">+ Add to a List</button>
+</div>

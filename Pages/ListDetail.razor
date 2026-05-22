@@ -1,5 +1,6 @@
-@page "/lists/{Id:int}"
+@page "/lists/{Id}"
 @attribute [Authorize]
+@using ClintCardShop.Data
 @inject CardListService ListSvc
 @inject CollectionService Collection
 @inject LocationService LocationSvc
@@ -176,7 +177,7 @@ else
                                 <label class="configure-label">
                                     Location
                                     <select class="loc-select" @bind="_addLocationId">
-                                        <option value="0">Collection</option>
+                                        <option value="@CollectionDbContext.DefaultLocationId">Collection</option>
                                         @foreach (var loc in _locations)
                                         {
                                             <option value="@loc.Id">@loc.Name</option>
@@ -237,7 +238,7 @@ else
 <CardDetailModal @ref="_modal" OnClose="HandleModalClose" />
 
 @code {
-    [Parameter] public int Id { get; set; }
+    [Parameter] public string Id { get; set; } = "";
 
     private CardList? _list;
     private Dictionary<string, int> _listVariantCounts = new();
@@ -272,7 +273,7 @@ else
 
     private CardBrief? _addCard;
     private string _addVariant = "Normal";
-    private int _addLocationId;
+    private string _addLocationId = ClintCardShop.Data.CollectionDbContext.DefaultLocationId;
     private int _addCount = 1;
     private string? _addConfigError;
 
@@ -321,7 +322,18 @@ else
 
     private async Task ReloadListCardsAsync()
     {
-        _listVariantCounts = await ListSvc.GetVariantCountsByListAsync(Id);
+        if (_list?.Type == "Wishlist")
+        {
+            var entries = await ListSvc.GetWishlistEntriesAsync(Id);
+            _listVariantCounts = entries.ToDictionary(e => $"{e.CardId}:{e.Variant}", e => e.WantedCount);
+        }
+        else
+        {
+            var instances = await ListSvc.GetInstancesByListAsync(Id);
+            _listVariantCounts = instances
+                .GroupBy(i => $"{i.CardId}:{i.Variant}")
+                .ToDictionary(g => g.Key, g => g.Count());
+        }
         var cardIds = _listVariantCounts.Keys.Select(k => k.Split(':')[0]).Distinct().ToHashSet();
         if (cardIds.Count == 0) { _listCardBriefs = new(); return; }
 
@@ -384,7 +396,10 @@ else
 
     private async Task RemoveCardAsync(CardBrief card)
     {
-        await ListSvc.RemoveCardAsync(Id, card.Id);
+        var instances = await ListSvc.GetInstancesByListAsync(Id);
+        var toRemove  = instances.FirstOrDefault(i => i.CardId == card.Id);
+        if (toRemove is not null)
+            await ListSvc.RemoveInstanceFromListAsync(Id, toRemove.Id);
         await ReloadListCardsAsync();
     }
 
@@ -422,7 +437,7 @@ else
         _setsLoading = true;
         StateHasChanged();
         var setsTask  = TcgDex.GetSetsAsync();
-        var ownedTask = Collection.GetAllCountsAsync();
+        var ownedTask = Collection.GetCountsAsync();
         await Task.WhenAll(setsTask, ownedTask);
         _allSets     = setsTask.Result;
         _ownedSetIds = ownedTask.Result.Keys
@@ -475,7 +490,7 @@ else
     {
         _addCard        = card;
         _addVariant     = "Normal";
-        _addLocationId  = 0;
+        _addLocationId  = ClintCardShop.Data.CollectionDbContext.DefaultLocationId;
         _addCount       = 1;
         _addConfigError = null;
         _addCardDetail  = null;
@@ -510,7 +525,15 @@ else
         if (_addCard is null) return;
         if (_addCount < 0) { _addConfigError = "Count cannot be negative."; return; }
         _addConfigError = null;
-        await ListSvc.SetEntryAsync(Id, _addCard.Id, _addLocationId, _addVariant, _addCount);
+        if (_list?.Type == "Wishlist")
+        {
+            await ListSvc.SetWishlistEntryAsync(Id, _addCard.Id, _addVariant, _addCount);
+        }
+        else
+        {
+            for (int i = 0; i < _addCount; i++)
+                await Collection.AddInstanceAsync(_addCard.Id, _addVariant, _addLocationId, null, new[] { Id });
+        }
         _addSuccessMsg = $"{_addCard.Name} ({_addVariant}) added!";
         await ReloadListCardsAsync();
         _addStep = AddStep.CardPick;

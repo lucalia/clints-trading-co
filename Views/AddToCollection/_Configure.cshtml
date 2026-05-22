@@ -1,0 +1,119 @@
+@using ClintCardShop.Controllers
+@using ClintCardShop.Models
+@model AddToCollectionConfigureViewModel
+
+@{
+    var setId = Model.Card.Id.Contains('-')
+        ? Model.Card.Id[..Model.Card.Id.LastIndexOf('-')]
+        : Model.Card.Id;
+}
+
+<div class="modal-overlay" onclick="closeAddCollection()">
+    <div class="modal-panel" onclick="event.stopPropagation()" style="max-width:560px">
+        <button class="modal-close" onclick="closeAddCollection()">&#10005;</button>
+        <div style="padding:1.5rem">
+            <h2 class="modal-card-name" style="font-size:1.1rem;margin-bottom:.75rem">Add Card to Collection</h2>
+            <div class="step-header" style="margin-bottom:.75rem">
+                <button type="button" class="btn-cancel"
+                        hx-get="/partials/add-to-collection/cards"
+                        hx-target="#add-collection-host"
+                        hx-swap="innerHTML"
+                        hx-vals='{"setId":"@setId"}'>&#8592; Back</button>
+                <span class="step-title">Configure</span>
+            </div>
+
+            <div style="display:flex;gap:1rem;margin-bottom:1.25rem">
+                @if (Model.Card.Image is not null)
+                {
+                    <img src="@(Model.Card.Image + "/low.webp")" alt="@Model.Card.Name"
+                         style="width:80px;height:auto;border-radius:6px;flex-shrink:0" />
+                }
+                <div>
+                    <div style="font-weight:700;font-size:1rem">@Model.Card.Name</div>
+                    <div style="font-size:.8rem;color:var(--text2)">#@Model.Card.LocalId</div>
+                    @if (Model.Detail is not null)
+                    {
+                        <div style="font-size:.78rem;color:var(--text2);margin-top:.2rem">@Model.Detail.Rarity</div>
+                    }
+                </div>
+            </div>
+
+            <form hx-post="/partials/add-to-collection/submit"
+                  hx-target="#add-collection-host"
+                  hx-swap="innerHTML">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="CardId" value="@Model.Card.Id" />
+
+                <div class="configure-fields" style="gap:.65rem">
+                    <label class="configure-label">
+                        Variant
+                        <select class="loc-select" name="Variant">
+                            @foreach (var v in Model.Variants)
+                            {
+                                <option value="@v">@(v == "FirstEdition" ? "1st Edition" : v)</option>
+                            }
+                        </select>
+                    </label>
+
+                    <label class="configure-label">
+                        Quantity
+                        <input class="loc-input" style="width:80px" type="number"
+                               name="Quantity" min="1" max="99" value="1" />
+                    </label>
+
+                    <label class="configure-label">
+                        Location
+                        <select class="loc-select" name="LocationId">
+                            <option value="@CollectionDbContext.DefaultLocationId">Collection (default)</option>
+                            @foreach (var loc in Model.Locations)
+                            {
+                                <option value="@loc.Id">@loc.Name</option>
+                            }
+                        </select>
+                    </label>
+
+                    @if (Model.Purchases.Any(p => { var linked = Model.LinkedQty.TryGetValue(p.Id, out var lq) ? lq : 0; return p.Quantity - linked > 0; }))
+                    {
+                        <label class="configure-label">
+                            Link to Purchase (optional)
+                            <select class="loc-select" name="PurchaseId">
+                                <option value="">— none —</option>
+                                @foreach (var p in Model.Purchases)
+                                {
+                                    var linked    = Model.LinkedQty.TryGetValue(p.Id, out var lq) ? lq : 0;
+                                    var remaining = p.Quantity - linked;
+                                    @if (remaining > 0)
+                                    {
+                                        <option value="@p.Id">@p.Description (@p.PurchasedAt.ToString("MMM d") — @remaining slots left)</option>
+                                    }
+                                }
+                            </select>
+                        </label>
+                    }
+
+                    @if (Model.StandardLists.Any())
+                    {
+                        <div class="configure-label">
+                            Add to Lists (optional)
+                            <div style="display:flex;flex-direction:column;gap:.3rem;margin-top:.35rem">
+                                @foreach (var list in Model.StandardLists)
+                                {
+                                    <label style="display:flex;align-items:center;gap:.5rem;font-size:.85rem;font-weight:400;cursor:pointer">
+                                        <input type="checkbox" name="ListIds" value="@list.Id" />
+                                        @list.Name
+                                    </label>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <div style="margin-top:1.25rem">
+                    <button type="submit" class="btn-add" style="width:100%;justify-content:center">
+                        Add to Collection
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

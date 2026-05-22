@@ -1,5 +1,6 @@
-@page "/locations/{Id:int}"
+@page "/locations/{Id}"
 @attribute [Authorize]
+@using ClintCardShop.Data
 @inject LocationService LocationSvc
 @inject CollectionService Collection
 @inject TcgDexService TcgDex
@@ -24,7 +25,7 @@ else
         <div class="list-detail-header">
             <a href="/locations" class="set-back-btn" title="All Locations">&#8592;</a>
             <h2 class="page-title" style="margin:0">@_locationName</h2>
-            @if (Id == 0)
+            @if (Id == CollectionDbContext.DefaultLocationId)
             {
                 <span class="list-shared-badge">Default</span>
             }
@@ -57,7 +58,7 @@ else
                  OnClose="HandleModalClose" />
 
 @code {
-    [Parameter] public int Id { get; set; }
+    [Parameter] public string Id { get; set; } = "";
 
     private string? _locationName;
     private bool _loading = true;
@@ -70,8 +71,9 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        if (Id == 0)
+        if (Id == CollectionDbContext.DefaultLocationId || string.IsNullOrEmpty(Id))
         {
+            Id = CollectionDbContext.DefaultLocationId;
             _locationName = "Collection";
         }
         else

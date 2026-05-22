@@ -1,6 +1,8 @@
-@page "/purchases/{Id:int}"
+@page "/purchases/{Id}"
 @attribute [Authorize]
+@using ClintCardShop.Data
 @inject PurchaseService PurchaseSvc
+@inject CollectionService Collection
 @inject TcgDexService TcgDex
 @inject LocationService LocationSvc
 @inject NavigationManager Nav
@@ -212,7 +214,7 @@ else
                                 <label class="configure-label">
                                     Location (where this copy lives)
                                     <select class="loc-select" @bind="_addLocationId">
-                                        <option value="0">Collection</option>
+                                        <option value="@CollectionDbContext.DefaultLocationId">Collection</option>
                                         @foreach (var loc in _locations)
                                         {
                                             <option value="@loc.Id">@loc.Name</option>
@@ -268,7 +270,7 @@ else
 <CardDetailModal @ref="_modal" OnClose="HandleModalClose" />
 
 @code {
-    [Parameter] public int Id { get; set; }
+    [Parameter] public string Id { get; set; } = "";
 
     private Purchase? _purchase;
     private bool _loading = true;
@@ -293,7 +295,7 @@ else
     private string? _addSuccessMsg;
     private CardBrief? _addCard;
     private string _addVariant = "Normal";
-    private int _addLocationId;
+    private string _addLocationId = CollectionDbContext.DefaultLocationId;
     private int _addQty = 1;
     private string? _addConfigError;
     private CardDetail? _addCardDetail;
@@ -328,7 +330,10 @@ else
 
     private async Task ReloadLinkedCardsAsync()
     {
-        _purchaseVariantCounts = await PurchaseSvc.GetVariantCountsByPurchaseAsync(Id);
+        var instances = await PurchaseSvc.GetInstancesByPurchaseAsync(Id);
+        _purchaseVariantCounts = instances
+            .GroupBy(i => $"{i.CardId}:{i.Variant}")
+            .ToDictionary(g => g.Key, g => g.Count());
         var cardIds = _purchaseVariantCounts.Keys.Select(k => k.Split(':')[0]).Distinct().ToHashSet();
         if (cardIds.Count == 0) { _linkedCardBriefs = new(); return; }
         var setIds = cardIds.Select(id => { var i = id.LastIndexOf('-'); return i > 0 ? id[..i] : id; }).Distinct().ToArray();
@@ -352,7 +357,10 @@ else
 
     private async Task UnlinkCardAsync(CardBrief card)
     {
-        await PurchaseSvc.RemovePurchaseCardAsync(Id, card.Id);
+        var instances = await PurchaseSvc.GetInstancesByPurchaseAsync(Id);
+        var toRemove  = instances.FirstOrDefault(i => i.CardId == card.Id);
+        if (toRemove is not null)
+            await PurchaseSvc.UnlinkInstanceAsync(toRemove.Id);
         await ReloadLinkedCardsAsync();
     }
 
@@ -407,7 +415,7 @@ else
     {
         _addCard        = card;
         _addVariant     = "Normal";
-        _addLocationId  = 0;
+        _addLocationId  = CollectionDbContext.DefaultLocationId;
         _addQty         = Math.Min(1, MaxLinkQty > 0 ? MaxLinkQty : 1);
         _addConfigError = null;
         _addCardDetail  = null;
@@ -443,7 +451,8 @@ else
             return;
         }
         _addConfigError = null;
-        await PurchaseSvc.SetPurchaseCardAsync(Id, _addCard.Id, _addLocationId, _addVariant, _addQty);
+        for (int i = 0; i < _addQty; i++)
+            await Collection.AddInstanceAsync(_addCard.Id, _addVariant, _addLocationId, Id, Array.Empty<string>());
         _addSuccessMsg = $"{_addCard.Name} ({_addVariant}) linked!";
         await ReloadLinkedCardsAsync();
         _addStep = AddStep.CardPick;

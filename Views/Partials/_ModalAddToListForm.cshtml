@@ -1,0 +1,52 @@
+@using ClintCardShop.Models
+@model ModalAddToListFormViewModel
+
+<div class="collection-section" style="margin-top:.75rem;border-top:1px solid var(--border);padding-top:.75rem">
+    <div class="section-label" style="border:none;padding:0;margin-bottom:.5rem">Add to a List</div>
+    <form hx-post="/partials/modal-tab/@Model.CardId/lists/submit-add"
+          hx-target="#modal-tab-content"
+          hx-swap="innerHTML">
+        @Html.AntiForgeryToken()
+        <div class="configure-fields" style="gap:.5rem">
+            <label class="configure-label">
+                List
+                <select class="loc-select" name="ListId" style="width:100%">
+                    <option value="0">— select —</option>
+                    @foreach (var l in Model.Lists)
+                    {
+                        <option value="@l.Id">@l.Name@(l.Type == "Wishlist" ? " (Wishlist)" : "")</option>
+                    }
+                </select>
+            </label>
+            <label class="configure-label">
+                Variant
+                <select class="loc-select" name="Variant">
+                    @foreach (var v in Model.Variants)
+                    {
+                        <option value="@v">@(v == "FirstEdition" ? "1st Edition" : v)</option>
+                    }
+                </select>
+            </label>
+            <label class="configure-label">
+                Location
+                <select class="loc-select" name="LocationId">
+                    <option value="0">Collection</option>
+                    @foreach (var loc in Model.Locations)
+                    {
+                        <option value="@loc.Id">@loc.Name</option>
+                    }
+                </select>
+            </label>
+            <label class="configure-label">
+                Count <input class="loc-input" style="width:70px" type="number" name="Count" min="0" value="1" />
+            </label>
+        </div>
+        <div style="display:flex;gap:.4rem;margin-top:.5rem">
+            <button type="submit" class="btn-add" style="flex:1">Add to List</button>
+            <button type="button" class="btn-cancel"
+                    hx-get="/partials/modal-tab/@Model.CardId/lists"
+                    hx-target="#modal-tab-content"
+                    hx-swap="innerHTML">Cancel</button>
+        </div>
+    </form>
+</div>

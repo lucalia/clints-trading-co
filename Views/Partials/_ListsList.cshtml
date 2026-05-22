@@ -1,0 +1,36 @@
+@using ClintCardShop.Models
+@model ListsListViewModel
+
+@if (!Model.Lists.Any())
+{
+    <div class="loc-empty">No lists yet. Create one above.</div>
+}
+else
+{
+    <div class="location-grid">
+        @foreach (var list in Model.Lists)
+        {
+            <div class="location-card">
+                <div class="location-card-header">
+                    <a href="/lists/@list.Id" class="list-name-link">@list.Name</a>
+                    @if (list.Type == "Wishlist") { <span class="list-type-badge">Wishlist</span> }
+                    @if (list.ShareToken is not null) { <span class="list-shared-badge">Shared</span> }
+                </div>
+                <div class="location-card-footer">
+                    @{ var listCardCount = Model.ListCounts.TryGetValue(list.Id, out var lcc) ? lcc : 0; }
+                    <span class="location-count">
+                        @listCardCount unique card@(listCardCount == 1 ? "" : "s")
+                    </span>
+                    <div class="location-actions">
+                        <button class="btn-delete"
+                                hx-post="/partials/lists/@list.Id/delete"
+                                hx-target="#lists-list"
+                                hx-swap="innerHTML"
+                                hx-include="[name='__RequestVerificationToken']"
+                                onclick="return confirm('Delete @list.Name?')">Delete</button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}

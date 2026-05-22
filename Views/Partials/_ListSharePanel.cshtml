@@ -1,0 +1,12 @@
+@using ClintCardShop.Models
+@model ListSharePanelViewModel
+
+<div class="share-panel">
+    <input class="share-url-input" readonly value="@Model.ShareUrl" onclick="this.select()" />
+    <button class="btn-edit" onclick="copyToClipboard('@Model.ShareUrl')">Copy</button>
+    <button class="btn-delete"
+            hx-post="/partials/list/@Model.ListId/revoke-share"
+            hx-target="#share-panel"
+            hx-swap="innerHTML"
+            hx-include="[name='__RequestVerificationToken']">Revoke</button>
+</div>

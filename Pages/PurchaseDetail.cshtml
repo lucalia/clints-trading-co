@@ -1,0 +1,52 @@
+@page "/purchases/{id}"
+@model ClintCardShop.Pages.PurchaseDetailModel
+@using ClintCardShop.Models
+@{
+    ViewData["Title"] = Model.Purchase?.Description ?? "Purchase";
+    var token = ((Microsoft.AspNetCore.Mvc.RazorPages.PageModel)Model).HttpContext
+        .RequestServices
+        .GetRequiredService<Microsoft.AspNetCore.Antiforgery.IAntiforgery>()
+        .GetAndStoreTokens(((Microsoft.AspNetCore.Mvc.RazorPages.PageModel)Model).HttpContext)
+        .RequestToken;
+    var unlinkUrl = "/partials/purchase/" + (Model.Purchase?.Id ?? "") + "/unlink";
+}
+
+@if (Model.Purchase is null)
+{
+    <div class="error-banner"><strong>Purchase not found.</strong></div>
+}
+else
+{
+    var linked     = Model.LinkedVariantCounts.Values.Sum();
+    var reconciled = linked >= Model.Purchase.Quantity;
+    var hasAny     = linked > 0;
+
+    <div class="locations-page">
+        <div class="list-detail-header">
+            <a href="/purchases" class="set-back-btn" title="All Purchases">&#8592;</a>
+            <h2 class="page-title" style="margin:0">@Model.Purchase.Description</h2>
+            <span class="purchase-type-badge purchase-type-@Model.Purchase.Type.ToLower().Replace(" ","")">@Model.Purchase.Type</span>
+            @if (reconciled)       { <span class="reconcile-badge reconcile-ok">&#10003; Reconciled</span> }
+            else if (hasAny)       { <span class="reconcile-badge reconcile-partial">@linked / @Model.Purchase.Quantity linked</span> }
+            else                   { <span class="reconcile-badge reconcile-none">Unreconciled — @Model.Purchase.Quantity cards to link</span> }
+        </div>
+
+        <div id="purchase-info" class="purchase-card" style="margin-bottom:1.25rem">
+            <partial name="~/Views/Partials/_PurchaseInfo.cshtml" model="Model.Purchase" />
+            <div style="margin-top:.6rem">
+                <button class="btn-edit"
+                        hx-get="/partials/purchase/@Model.Purchase.Id/edit-form"
+                        hx-target="#purchase-info"
+                        hx-swap="innerHTML">Edit Details</button>
+            </div>
+        </div>
+
+        <div id="purchase-panel">
+            <partial name="~/Views/Partials/_PurchaseCardsPanel.cshtml"
+                     model="new ClintCardShop.Models.PurchaseCardsPanelViewModel(
+                         Model.Purchase,
+                         Model.CardBriefs,
+                         Model.LinkedVariantCounts)" />
+        </div>
+    </div>
+}

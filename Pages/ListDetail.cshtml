@@ -1,0 +1,79 @@
+@page "/lists/{id}"
+@model ClintCardShop.Pages.ListDetailModel
+@using ClintCardShop.Models
+@{
+    ViewData["Title"] = Model.List?.Name ?? "List";
+    var token = ((Microsoft.AspNetCore.Mvc.RazorPages.PageModel)Model).HttpContext
+        .RequestServices
+        .GetRequiredService<Microsoft.AspNetCore.Antiforgery.IAntiforgery>()
+        .GetAndStoreTokens(((Microsoft.AspNetCore.Mvc.RazorPages.PageModel)Model).HttpContext)
+        .RequestToken;
+    var listRemoveUrl     = "/partials/list/" + (Model.List?.Id ?? "") + "/remove-card";
+    var listDisplayCounts = Model.IsWishlist ? Model.WishlistDisplayCounts : Model.ListVariantCounts;
+}
+
+@if (Model.List is null)
+{
+    <div class="error-banner"><strong>List not found.</strong></div>
+}
+else
+{
+    <div class="locations-page">
+        <div class="list-detail-header">
+            <a href="/lists" class="set-back-btn" title="All Lists">&#8592;</a>
+            <h2 class="page-title" style="margin:0">@Model.List.Name</h2>
+            @if (Model.List.Type == "Wishlist") { <span class="list-type-badge">Wishlist</span> }
+            <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center">
+                <button class="btn-add" style="padding:.35rem .85rem;font-size:.85rem"
+                        hx-get="/partials/add-card/sets?context=list&ctxId=@Model.List.Id"
+                        hx-target="#add-card-panel"
+                        hx-swap="innerHTML">+ Add Card</button>
+                <button class="btn-share @(Model.List.ShareToken is not null ? "active" : "")"
+                        hx-post="/partials/list/@Model.List.Id/share"
+                        hx-target="#share-panel"
+                        hx-swap="innerHTML"
+                        hx-headers='{"RequestVerificationToken":"@token"}'>
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <circle cx="12" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="12" cy="13" r="1.5"/>
+                        <line x1="10.6" y1="4.2" x2="5.4" y2="6.8"/><line x1="5.4" y1="9.2" x2="10.6" y2="11.8"/>
+                    </svg>
+                    Share
+                </button>
+            </div>
+        </div>
+
+        <div id="share-panel" style="margin-bottom:@(Model.List.ShareToken is not null ? "1rem" : "0")">
+            @if (Model.List.ShareToken is not null)
+            {
+                var shareUrl = $"{Request.Scheme}://{Request.Host}/list/share/{Model.List.ShareToken}";
+                <partial name="~/Views/Partials/_ListSharePanel.cshtml"
+                         model="new ClintCardShop.Models.ListSharePanelViewModel(Model.List.Id, shareUrl)" />
+            }
+        </div>
+
+        <div id="add-card-panel"></div>
+
+        @if (Model.FulfillMsg is not null)
+        {
+            <div class="add-success" style="margin-bottom:1rem">@Model.FulfillMsg</div>
+        }
+
+        <div id="list-cards">
+            @if (Model.CardBriefs.Count == 0)
+            {
+                <div class="loc-empty">No cards in this list yet. Click <strong>+ Add Card</strong> to get started.</div>
+            }
+            else
+            {
+                <div class="location-cards-summary">
+                    @Model.CardBriefs.Count unique card@(Model.CardBriefs.Count == 1 ? "" : "s") &mdash;
+                    @Model.CardBriefs.Sum(x => x.Count) total @(Model.CardBriefs.Sum(x => x.Count) == 1 ? "copy" : "copies")
+                </div>
+                <partial name="~/Views/Partials/_DetailCardGrid.cshtml"
+                         model="new ClintCardShop.Models.DetailCardGridViewModel(
+                             Model.CardBriefs.Select(x => x.Card).ToList(),
+                             listDisplayCounts, listRemoveUrl, null)" />
+            }
+        </div>
+    </div>
+}

@@ -4,86 +4,85 @@ namespace ClintCardShop.Data;
 
 public class CollectionDbContext(DbContextOptions<CollectionDbContext> options) : DbContext(options)
 {
-    public DbSet<CollectionEntry> CollectionEntries => Set<CollectionEntry>();
-    public DbSet<Location> Locations => Set<Location>();
+    public static readonly string DefaultLocationId = Guid.Empty.ToString();
 
-    public DbSet<CardList> CardLists => Set<CardList>();
-    public DbSet<ListEntry> ListEntries => Set<ListEntry>();
-    public DbSet<Purchase> Purchases => Set<Purchase>();
-    public DbSet<PurchaseCard> PurchaseCards => Set<PurchaseCard>();
+    public DbSet<CardInstance>   CardInstances   => Set<CardInstance>();
+    public DbSet<Location>       Locations       => Set<Location>();
+    public DbSet<Purchase>       Purchases       => Set<Purchase>();
+    public DbSet<CardList>       CardLists       => Set<CardList>();
+    public DbSet<ListMember>     ListMembers     => Set<ListMember>();
+    public DbSet<WishlistEntry>  WishlistEntries => Set<WishlistEntry>();
+    public DbSet<ApiCacheEntry>  ApiCache        => Set<ApiCacheEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<CollectionEntry>()
-            .HasKey(e => new { e.CardId, e.LocationId, e.Variant });
-
-        modelBuilder.Entity<Location>()
-            .HasKey(l => l.Id);
-
-        modelBuilder.Entity<CardList>()
-            .HasKey(l => l.Id);
-        modelBuilder.Entity<CardList>()
-            .HasIndex(l => l.ShareToken)
-            .IsUnique();
-
-        modelBuilder.Entity<ListEntry>()
-            .HasKey(e => new { e.ListId, e.CardId, e.LocationId, e.Variant });
-
-        modelBuilder.Entity<PurchaseCard>()
-            .HasKey(e => new { e.PurchaseId, e.CardId, e.LocationId, e.Variant });
+        modelBuilder.Entity<CardInstance>().HasKey(e => e.Id);
+        modelBuilder.Entity<Location>().HasKey(e => e.Id);
+        modelBuilder.Entity<Purchase>().HasKey(e => e.Id);
+        modelBuilder.Entity<CardList>().HasKey(e => e.Id);
+        modelBuilder.Entity<CardList>().HasIndex(e => e.ShareToken).IsUnique();
+        modelBuilder.Entity<ListMember>().HasKey(e => new { e.ListId, e.InstanceId });
+        modelBuilder.Entity<WishlistEntry>().HasKey(e => e.Id);
+        modelBuilder.Entity<ApiCacheEntry>().HasKey(e => e.Url);
     }
 }
 
-public class CollectionEntry
+public class CardInstance
 {
-    public string CardId { get; set; } = "";
-    public int LocationId { get; set; } = 0;    // 0 = Unassigned
-    public string Variant { get; set; } = "Normal";
-    public int Count { get; set; }
+    public string  Id         { get; set; } = Guid.NewGuid().ToString();
+    public string  CardId     { get; set; } = "";
+    public string  Variant    { get; set; } = "Normal";
+    public string  LocationId { get; set; } = CollectionDbContext.DefaultLocationId;
+    public string? PurchaseId { get; set; }
+    public DateTime AddedAt   { get; set; } = DateTime.UtcNow;
 }
 
 public class Location
 {
-    public int Id { get; set; }
+    public string Id   { get; set; } = Guid.NewGuid().ToString();
     public string Name { get; set; } = "";
     public string Type { get; set; } = "Box";
 }
 
-public class CardList
-{
-    public int Id { get; set; }
-    public string Name { get; set; } = "";
-    public string? ShareToken { get; set; }
-    public string Type { get; set; } = "Standard";  // "Standard" | "Wishlist"
-}
-
-public class ListEntry
-{
-    public int ListId { get; set; }
-    public string CardId { get; set; } = "";
-    public int LocationId { get; set; }
-    public string Variant { get; set; } = "Normal";
-    public int Count { get; set; }
-}
-
-public class PurchaseCard
-{
-    public int PurchaseId { get; set; }
-    public string CardId { get; set; } = "";
-    public int LocationId { get; set; } = 0;   // which copy/location this came from; 0 = unspecified
-    public string Variant { get; set; } = "Normal";
-    public int Quantity { get; set; } = 1;
-}
-
 public class Purchase
 {
-    public int Id { get; set; }
+    public string   Id          { get; set; } = Guid.NewGuid().ToString();
     public DateTime PurchasedAt { get; set; } = DateTime.Today;
-    public string Source { get; set; } = "";          // e.g. "eBay", "Walgreens"
-    public string Description { get; set; } = "";
-    public decimal TotalCost { get; set; }
-    public int Quantity { get; set; } = 1;
-    public string Type { get; set; } = "Other";       // Lot, Pack, Single, Bundle, Other
-    public string? ReceiptUrl { get; set; }
-    public string? Notes { get; set; }
+    public string   Source      { get; set; } = "";
+    public string   Description { get; set; } = "";
+    public decimal  TotalCost   { get; set; }
+    public int      Quantity    { get; set; } = 1;
+    public string   Type        { get; set; } = "Other";
+    public string?  ReceiptUrl  { get; set; }
+    public string?  Notes       { get; set; }
+}
+
+public class CardList
+{
+    public string  Id         { get; set; } = Guid.NewGuid().ToString();
+    public string  Name       { get; set; } = "";
+    public string? ShareToken { get; set; }
+    public string  Type       { get; set; } = "Standard";
+}
+
+public class ListMember
+{
+    public string ListId     { get; set; } = "";
+    public string InstanceId { get; set; } = "";
+}
+
+public class WishlistEntry
+{
+    public string Id          { get; set; } = Guid.NewGuid().ToString();
+    public string ListId      { get; set; } = "";
+    public string CardId      { get; set; } = "";
+    public string Variant     { get; set; } = "Normal";
+    public int    WantedCount { get; set; } = 1;
+}
+
+public class ApiCacheEntry
+{
+    public string   Url      { get; set; } = "";
+    public string   Body     { get; set; } = "";
+    public DateTime CachedAt { get; set; }
 }

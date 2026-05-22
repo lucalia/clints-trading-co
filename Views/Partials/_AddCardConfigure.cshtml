@@ -1,0 +1,82 @@
+@using ClintCardShop.Models
+@model AddCardConfigureViewModel
+
+<div class="add-card-panel">
+    <div class="step-header">
+        <button type="button" class="btn-cancel"
+                hx-get="/partials/add-card/cards"
+                hx-target="#add-card-panel"
+                hx-swap="innerHTML"
+                hx-vals='{"context":"@Model.Context","ctxId":@Model.CtxId,"setId":"@(Model.Card.Id.Contains("-") ? Model.Card.Id[..Model.Card.Id.LastIndexOf("-")] : Model.Card.Id)"}'>&#8592; Back</button>
+        <span class="step-title">@(Model.Context == "purchase" ? "Link Card" : "Configure Entry")</span>
+        <button type="button" class="btn-cancel" onclick="document.getElementById('add-card-panel').innerHTML=''">Cancel</button>
+    </div>
+
+    <form class="configure-form"
+          hx-post="/partials/add-card/submit"
+          hx-target="#add-card-panel"
+          hx-swap="innerHTML">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="Context"  value="@Model.Context" />
+        <input type="hidden" name="CtxId"    value="@Model.CtxId" />
+        <input type="hidden" name="CardId"   value="@Model.Card.Id" />
+
+        <div class="configure-card-preview">
+            @if (Model.Card.Image is not null)
+            {
+                <img src="@(Model.Card.Image + "/low.webp")" alt="@Model.Card.Name" class="configure-card-img" />
+            }
+            <div>
+                <div class="configure-card-name">@Model.Card.Name</div>
+                <div class="card-tile-id">#@Model.Card.LocalId</div>
+            </div>
+        </div>
+
+        <div class="configure-fields">
+            <label class="configure-label">
+                Variant
+                <select class="loc-select" name="Variant">
+                    @foreach (var v in Model.Variants)
+                    {
+                        <option value="@v">@(v == "FirstEdition" ? "1st Edition" : v)</option>
+                    }
+                </select>
+            </label>
+
+            @if (!Model.IsWishlist)
+            {
+                <label class="configure-label">
+                    Location
+                    <select class="loc-select" name="LocationId">
+                        <option value="0">Collection</option>
+                        @foreach (var loc in Model.Locations)
+                        {
+                            <option value="@loc.Id">@loc.Name</option>
+                        }
+                    </select>
+                </label>
+            }
+
+            <label class="configure-label">
+                @(Model.IsWishlist ? "Wanted count" : Model.Context == "purchase" ? "Quantity" : "Count")
+                <input class="loc-input" style="width:80px" type="number"
+                       name="Count" min="0" max="@Model.MaxCount" value="1" />
+            </label>
+
+            @if (Model.Context == "purchase")
+            {
+                <div class="configure-label">
+                    Remaining slots
+                    <span class="purchase-per-card" style="color:@(Model.MaxCount == 0 ? "var(--red)" : "var(--accent2)")">@Model.MaxCount</span>
+                </div>
+            }
+        </div>
+
+        <div class="configure-actions">
+            <button type="submit" class="btn-add"
+                    @(Model.MaxCount == 0 && Model.Context == "purchase" ? "disabled" : "")>
+                @(Model.Context == "purchase" ? "Link to Purchase" : Model.IsWishlist ? "Add to Wishlist" : "Add to List")
+            </button>
+        </div>
+    </form>
+</div>

@@ -125,7 +125,7 @@
         <div class="location-grid">
             @foreach (var p in _purchases)
             {
-                var linked     = _linkedQty.GetValueOrDefault(p.Id);
+                var linked     = _linkedQty.TryGetValue(p.Id, out var lq) ? lq : 0;
                 var reconciled = linked >= p.Quantity;
                 var hasAny     = linked > 0;
                 <div class="location-card">
@@ -180,12 +180,12 @@
 
 @code {
     private List<Purchase> _purchases = new();
-    private Dictionary<int, int> _linkedQty = new();
+    private Dictionary<string, int> _linkedQty = new();
     private bool _loading = true;
     private bool _showAddForm;
     private string? _addError;
     private Purchase _new = NewBlank();
-    private int _editingId = -1;
+    private string _editingId = "";
     private string _editName = "";
     private Purchase? _editCopy;
 
@@ -198,7 +198,7 @@
     private async Task RefreshAsync()
     {
         var pTask = PurchaseSvc.GetAllAsync();
-        var qTask = PurchaseSvc.GetLinkedQuantityPerPurchaseAsync();
+        var qTask = PurchaseSvc.GetLinkedCountsPerPurchaseAsync();
         await Task.WhenAll(pTask, qTask);
         _purchases = pTask.Result;
         _linkedQty = qTask.Result;
@@ -227,13 +227,13 @@
         if (_editCopy is null) return;
         _editCopy.Description = _editName;
         await PurchaseSvc.UpdateAsync(_editCopy);
-        _editingId = -1;
+        _editingId = "";
         await RefreshAsync();
     }
 
-    private void CancelEdit() => _editingId = -1;
+    private void CancelEdit() => _editingId = "";
 
-    private async Task DeleteAsync(int id)
+    private async Task DeleteAsync(string id)
     {
         await PurchaseSvc.DeleteAsync(id);
         await RefreshAsync();

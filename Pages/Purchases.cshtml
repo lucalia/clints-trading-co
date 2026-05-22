@@ -1,0 +1,30 @@
+@page
+@model ClintCardShop.Pages.PurchasesModel
+@using ClintCardShop.Models
+@{
+    ViewData["Title"] = "Purchases";
+    var token = ((Microsoft.AspNetCore.Mvc.RazorPages.PageModel)Model).HttpContext
+        .RequestServices
+        .GetRequiredService<Microsoft.AspNetCore.Antiforgery.IAntiforgery>()
+        .GetAndStoreTokens(((Microsoft.AspNetCore.Mvc.RazorPages.PageModel)Model).HttpContext)
+        .RequestToken;
+}
+
+<div class="locations-page">
+    <h2 class="page-title">Purchase History</h2>
+
+    <div class="add-location-form">
+        <button class="btn-add" style="width:100%;justify-content:center"
+                hx-get="/partials/purchases/add-form"
+                hx-target="#add-form-host"
+                hx-swap="innerHTML">
+            + Log Purchase
+        </button>
+        <div id="add-form-host"></div>
+    </div>
+
+    <div id="purchases-list">
+        <partial name="~/Views/Partials/_PurchasesList.cshtml"
+                 model="new ClintCardShop.Models.PurchasesListViewModel(Model.Purchases, Model.LinkedQty)" />
+    </div>
+</div>
