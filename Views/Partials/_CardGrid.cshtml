@@ -1,0 +1,52 @@
+@using ClintCardShop.Controllers
+@using ClintCardShop.Models
+@model CardGridViewModel
+
+<div class="card-grid-wrapper">
+    <div class="card-grid">
+        @foreach (var card in Model.Cards)
+        {
+            var total = Model.Counts.GetValueOrDefault(card.Id);
+            var chips = Model.VariantCounts
+                .Where(kv => kv.Key.StartsWith(card.Id + ":") && kv.Value > 0)
+                .Select(kv => (Variant: kv.Key.Split(':')[1], Count: kv.Value))
+                .OrderBy(x => x.Variant)
+                .ToList();
+            <div class="card-tile"
+                 hx-get="/partials/card-modal/@card.Id"
+                 hx-target="#modal-host"
+                 hx-swap="innerHTML"
+                 style="cursor:pointer">
+                <div class="card-image-wrap">
+                    @if (card.Image is not null)
+                    {
+                        <img class="card-image"
+                             src="@(card.Image + "/low.webp")"
+                             alt="@card.Name"
+                             loading="lazy"
+                             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+                        <div class="card-image-placeholder" style="display:none">?</div>
+                    }
+                    else
+                    {
+                        <div class="card-image-placeholder">?</div>
+                    }
+                    <div class="card-variant-overlay" id="chips-@card.Id">
+                        @foreach (var (variant, count) in chips)
+                        {
+                            <span class="variant-chip">@PartialsController.VariantShort(variant) &#215;@count</span>
+                        }
+                    </div>
+                </div>
+                <div class="card-tile-footer">
+                    <span class="card-tile-name">@card.Name</span>
+                    <span class="card-tile-id">#@card.LocalId</span>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+@if (!Model.Cards.Any())
+{
+    <div class="loc-empty">No cards match your filter.</div>
+}

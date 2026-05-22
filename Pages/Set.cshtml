@@ -1,0 +1,125 @@
+@page "/set/{setId}"
+@model ClintCardShop.Pages.SetModel
+@using ClintCardShop.Models
+@{
+    ViewData["Title"] = Model.Set?.Name ?? Model.SetId;
+}
+
+@if (Model.Error is not null)
+{
+    <div class="error-banner"><strong>Failed to load cards:</strong> @Model.Error</div>
+}
+else if (Model.Set is not null)
+{
+    <div class="set-hero" id="set-hero">
+        <a class="set-back-btn" href="/" title="All Sets">&#8592;</a>
+        @if (Model.Set.Logo is not null)
+        {
+            <img class="set-hero-logo" src="@(Model.Set.Logo + ".webp")" alt="@Model.Set.Name"
+                 onerror="this.style.display='none'" />
+        }
+        <div class="set-hero-info">
+            <h1 class="set-hero-name">@Model.Set.Name</h1>
+            <span class="set-hero-meta">@Model.Set.CardCount.Total cards &bull; @Model.Set.Id</span>
+        </div>
+    </div>
+
+    <div class="collection-controls">
+        <div class="controls-inner">
+            <input id="card-search"
+                   class="search-input"
+                   type="text"
+                   name="q"
+                   placeholder="Search cards&hellip;"
+                   autocomplete="off"
+                   hx-get="/partials/cards/@Model.SetId"
+                   hx-trigger="input delay:300ms"
+                   hx-target="#card-grid-container"
+                   hx-swap="innerHTML"
+                   hx-include="this, [name='filter']" />
+            <div class="filter-chips">
+                <button type="button" class="filter-chip active" name="filter" value="all"
+                        hx-get="/partials/cards/@Model.SetId"
+                        hx-target="#card-grid-container"
+                        hx-swap="innerHTML"
+                        hx-include="#card-search"
+                        hx-vals='{"filter":"all"}'
+                        onclick="setFilter(this)">All</button>
+                <button type="button" class="filter-chip" name="filter" value="owned"
+                        hx-get="/partials/cards/@Model.SetId"
+                        hx-target="#card-grid-container"
+                        hx-swap="innerHTML"
+                        hx-include="#card-search"
+                        hx-vals='{"filter":"owned"}'
+                        onclick="setFilter(this)">Owned</button>
+                <button type="button" class="filter-chip" name="filter" value="missing"
+                        hx-get="/partials/cards/@Model.SetId"
+                        hx-target="#card-grid-container"
+                        hx-swap="innerHTML"
+                        hx-include="#card-search"
+                        hx-vals='{"filter":"missing"}'
+                        onclick="setFilter(this)">Missing</button>
+            </div>
+            <span class="stat-chip" id="card-count">@Model.Set.Cards.Count / @Model.Set.CardCount.Total</span>
+        </div>
+    </div>
+
+    <div id="card-grid-container">
+        <div class="card-grid-wrapper">
+            <div class="card-grid">
+                @foreach (var card in Model.Set.Cards)
+                {
+                    var total = Model.Counts.GetValueOrDefault(card.Id);
+                    var chips = Model.VariantCounts
+                        .Where(kv => kv.Key.StartsWith(card.Id + ":") && kv.Value > 0)
+                        .Select(kv => (Variant: kv.Key.Split(':')[1], Count: kv.Value))
+                        .OrderBy(x => x.Variant)
+                        .ToList();
+                    <div class="card-tile"
+                         hx-get="/partials/card-modal/@card.Id"
+                         hx-target="#modal-host"
+                         hx-swap="innerHTML"
+                         style="cursor:pointer">
+                        <div class="card-image-wrap">
+                            @if (card.Image is not null)
+                            {
+                                <img class="card-image"
+                                     src="@(card.Image + "/low.webp")"
+                                     alt="@card.Name"
+                                     loading="lazy"
+                                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+                                <div class="card-image-placeholder" style="display:none">?</div>
+                            }
+                            else
+                            {
+                                <div class="card-image-placeholder">?</div>
+                            }
+                            <div class="card-variant-overlay" id="chips-@card.Id">
+                                @foreach (var (variant, count) in chips)
+                                {
+                                    <span class="variant-chip">@VariantShort(variant) &#215;@count</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="card-tile-footer">
+                            <span class="card-tile-name">@card.Name</span>
+                            <span class="card-tile-id">#@card.LocalId</span>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@functions {
+    static string VariantShort(string v) => v switch
+    {
+        "Normal"       => "NRM",
+        "Reverse"      => "REV",
+        "Holo"         => "HOLO",
+        "FirstEdition" => "1st",
+        "WPromo"       => "PROMO",
+        _              => v
+    };
+}

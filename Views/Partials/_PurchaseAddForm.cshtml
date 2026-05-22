@@ -1,0 +1,59 @@
+@using ClintCardShop.Data
+@model Purchase
+
+<form class="purchase-form"
+      hx-post="/partials/purchases"
+      hx-target="#purchases-list"
+      hx-swap="innerHTML"
+      hx-on::after-request="document.getElementById('add-form-host').innerHTML=''">
+    @Html.AntiForgeryToken()
+    <div class="purchase-form-row">
+        <label class="configure-label" style="flex:1">
+            Date
+            <input class="loc-input" type="date" name="PurchasedAt" value="@Model.PurchasedAt.ToString("yyyy-MM-dd")" />
+        </label>
+        <label class="configure-label" style="flex:2">
+            Source
+            <input class="loc-input" type="text" name="Source" placeholder="e.g. eBay, Walgreens" maxlength="100" required />
+        </label>
+        <label class="configure-label">
+            Type
+            <select class="loc-select" name="Type">
+                <option value="Lot">Lot</option>
+                <option value="Pack">Booster Pack</option>
+                <option value="Single">Single</option>
+                <option value="Bundle">Bundle</option>
+                <option value="Other" selected>Other</option>
+            </select>
+        </label>
+    </div>
+    <div class="purchase-form-row">
+        <label class="configure-label" style="flex:1">
+            Description
+            <input class="loc-input" type="text" name="Description" placeholder="e.g. 1300-card bulk lot" maxlength="200" required />
+        </label>
+    </div>
+    <div class="purchase-form-row">
+        <label class="configure-label">
+            Total Cost ($)
+            <input class="loc-input" type="number" name="TotalCost" min="0" step="0.01" style="width:110px" value="0" />
+        </label>
+        <label class="configure-label">
+            Card Qty
+            <input class="loc-input" type="number" name="Quantity" min="1" style="width:90px" value="1" />
+        </label>
+    </div>
+    <div class="purchase-form-row">
+        <label class="configure-label" style="flex:1">
+            Receipt URL (optional)
+            <input class="loc-input" type="url" name="ReceiptUrl" placeholder="https://&hellip;" maxlength="500" />
+        </label>
+    </div>
+    <div class="purchase-form-row">
+        <label class="configure-label" style="flex:1">
+            Notes (optional)
+            <textarea class="loc-input" name="Notes" rows="2" maxlength="500"></textarea>
+        </label>
+    </div>
+    <button type="submit" class="btn-add">Save Purchase</button>
+</form>

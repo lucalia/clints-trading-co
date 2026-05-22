@@ -1,0 +1,47 @@
+@using ClintCardShop.Controllers
+@using ClintCardShop.Models
+@using ClintCardShop.Data
+@model CollectionSectionViewModel
+
+<div id="collection-section" class="collection-section">
+    <div class="collection-section-top">
+        <span class="section-label" style="border:none;padding:0">My Collection</span>
+        <span class="collection-total">@Model.TotalOwned total</span>
+    </div>
+
+    @if (Model.Instances.Any())
+    {
+        <div class="loc-assignments">
+            @foreach (var inst in Model.Instances)
+            {
+                var locName = inst.LocationId == CollectionDbContext.DefaultLocationId
+                    ? "Collection"
+                    : (Model.Locations.FirstOrDefault(l => l.Id == inst.LocationId)?.Name ?? "?");
+                <div class="loc-assignment-row">
+                    <span>@inst.Variant &bull; @locName</span>
+                    <button type="button" class="btn-delete" style="padding:.1rem .4rem;font-size:.72rem"
+                            hx-post="/partials/collection/remove-instance/@inst.Id/for-card/@Model.CardId"
+                            hx-target="#modal-tab-content"
+                            hx-swap="innerHTML"
+                            hx-include="[name='__RequestVerificationToken']">&#215;</button>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="loc-empty" style="padding:.5rem 0;text-align:left;font-size:.82rem">Not in collection yet.</div>
+    }
+</div>
+
+@{
+    var variantTotals = Model.Instances
+        .GroupBy(i => i.Variant)
+        .ToDictionary(g => g.Key, g => g.Count());
+}
+<div id="chips-@Model.CardId" hx-swap-oob="true" class="card-variant-overlay">
+    @foreach (var (variant, count) in variantTotals.Where(kv => kv.Value > 0).OrderBy(kv => kv.Key))
+    {
+        <span class="variant-chip">@PartialsController.VariantShort(variant) &#215;@count</span>
+    }
+</div>

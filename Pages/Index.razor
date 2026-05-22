@@ -82,9 +82,8 @@ else if (_set is not null)
         {
             var setTask      = TcgDex.GetSetAsync(SetId);
             var variantTask  = Collection.GetAllVariantCountsAsync();
-            var purchaseTask = PurchaseSvc.GetLinkedQuantityByCardAsync();
-            await Task.WhenAll(setTask, variantTask, purchaseTask);
-            _purchaseLinked = purchaseTask.Result;
+            await Task.WhenAll(setTask, variantTask);
+            _purchaseLinked = new Dictionary<string, int>();
             _set           = setTask.Result;
             _variantCounts = variantTask.Result;
             _counts        = _variantCounts
@@ -153,7 +152,7 @@ else if (_set is not null)
         if (update.NewTotal == 0) _counts.Remove(update.CardId);
         else _counts[update.CardId] = update.NewTotal;
 
-        var variantTotals = await Collection.GetCardVariantTotalsAsync(update.CardId);
+        var variantTotals = await Collection.GetVariantCountsForCardAsync(update.CardId);
         var prefix = update.CardId + ":";
         foreach (var key in _variantCounts.Keys.Where(k => k.StartsWith(prefix)).ToList())
             _variantCounts.Remove(key);

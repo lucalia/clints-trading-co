@@ -14,7 +14,36 @@
       "PowerShell(Stop-Process *)",
       "PowerShell(Start-Process -FilePath \"dotnet\" -ArgumentList \"run --source https://api.nuget.org/v3/index.json\" -WorkingDirectory \"C:\\\\Users\\\\clint.warner\\\\source\\\\lucalia\\\\clints-card-shop\" -WindowStyle Normal)",
       "PowerShell(cd \"C:\\\\Users\\\\clint.warner\\\\source\\\\lucalia\\\\clints-card-shop\"; Start-Process powershell -ArgumentList \"-NoExit\", \"-Command\", \"dotnet run --source https://api.nuget.org/v3/index.json\" -WorkingDirectory \"C:\\\\Users\\\\clint.warner\\\\source\\\\lucalia\\\\clints-card-shop\")",
-      "PowerShell(Copy-Item *)"
+      "PowerShell(Copy-Item *)",
+      "mcp__azure-devops__wit_list_backlogs",
+      "mcp__azure-devops__wit_get_work_item_type",
+      "mcp__azure-devops__wit_create_work_item",
+      "mcp__azure-devops__wit_update_work_item",
+      "mcp__azure-devops__wit_add_child_work_items",
+      "mcp__azure-devops__wit_get_work_item",
+      "Bash(dotnet run *)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\clint.warner\\\\source\\\\lucalia\\\\clints-card-shop\\\\Pages\\\\ListShare.cshtml\" -ErrorAction SilentlyContinue)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\clint.warner\\\\source\\\\lucalia\\\\clints-card-shop\\\\Pages\\\\ListShare.cshtml.cs\" -ErrorAction SilentlyContinue)",
+      "Bash(Write-Host \"removed\")",
+      "Bash(powershell *)",
+      "Skill(update-config)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "WebFetch(domain:clints-trading-co.azurewebsites.net)",
+      "Bash(git checkout *)",
+      "Bash(Select-String \"_ViewImports|_ViewStart\")",
+      "PowerShell($proc = Start-Process -FilePath \"dotnet\" -ArgumentList \"run --no-build\" -WorkingDirectory \"C:\\\\Users\\\\clint.warner\\\\source\\\\lucalia\\\\clints-card-shop\" -PassThru -WindowStyle Hidden; Write-Host \"PID $\\($proc.Id\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5128/)",
+      "PowerShell($proc = Start-Process -FilePath \"dotnet\" -ArgumentList \"run\" -WorkingDirectory \"C:\\\\Users\\\\clint.warner\\\\source\\\\lucalia\\\\clints-card-shop\" -PassThru -WindowStyle Hidden; Write-Host \"PID $\\($proc.Id\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5128/login)",
+      "PowerShell($p = Start-Process -FilePath \"dotnet\" -ArgumentList \"run\" -WorkingDirectory \"C:\\\\Users\\\\clint.warner\\\\source\\\\lucalia\\\\clints-card-shop\" -PassThru -WindowStyle Hidden; Start-Sleep -Seconds 7; Start-Process \"http://localhost:5128\"; Write-Host \"PID $\\($p.Id\\), opened browser\")"
     ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "azure-devops"
+  ],
+  "worktree": {
+    "bgIsolation": "none"
   }
 }

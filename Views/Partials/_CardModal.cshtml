@@ -1,0 +1,93 @@
+@using ClintCardShop.Controllers
+@using ClintCardShop.Models
+@using Microsoft.AspNetCore.Html
+@model CardModalViewModel
+
+@{
+    var detail = Model.Detail;
+    var card   = Model.Card;
+    var cardId = detail?.Id ?? card?.Id ?? "";
+    var name   = detail?.Name ?? card?.Name ?? "";
+    var imgSrc = detail?.Image ?? card?.Image;
+    var variants = PartialsController.AvailableVariants(detail);
+    var total = Model.LocationCounts.Values.Sum();
+    var count = Model.LocationCounts.GetValueOrDefault($"0:{variants[0]}");
+}
+
+<div class="modal-overlay" onclick="closeModal()">
+    <div class="modal-panel" onclick="event.stopPropagation()">
+        <button class="modal-close" onclick="closeModal()">&#10005;</button>
+        <div class="modal-body">
+
+            <div class="modal-image-col">
+                @if (imgSrc is not null)
+                {
+                    <img class="modal-card-image zoomable"
+                         src="@(imgSrc + "/high.webp")"
+                         alt="@name"
+                         onclick="openZoom(this.src)"
+                         title="Click to zoom" />
+                }
+                @if (detail is not null)
+                {
+                    <div class="pricing-block">
+                        <div class="pricing-title">Price (USD est.)</div>
+                        @if (detail.Pricing?.Cardmarket is { } cm && (cm.Low ?? cm.Avg ?? cm.Trend) is not null)
+                        {
+                            @if (cm.Low is not null)   { <div class="price-row"><span>Low</span><span>$@PartialsController.ToUsd(cm.Low.Value)</span></div> }
+                            @if (cm.Avg is not null)   { <div class="price-row"><span>Avg</span><span>$@PartialsController.ToUsd(cm.Avg.Value)</span></div> }
+                            @if (cm.Trend is not null) { <div class="price-row"><span>Trend</span><span>$@PartialsController.ToUsd(cm.Trend.Value)</span></div> }
+                            <div class="price-note">Converted from Cardmarket EUR</div>
+                        }
+                        else
+                        {
+                            <div class="price-unavailable">No pricing data available</div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="modal-info-col">
+                <div class="modal-card-header">
+                    <h2 class="modal-card-name">@name</h2>
+                    @if (detail?.Hp is not null) { <span class="hp-badge">HP&nbsp;@detail.Hp</span> }
+                </div>
+
+                <div class="modal-tabs">
+                    <button class="modal-tab active"
+                            hx-get="/partials/modal-tab/@cardId/info"
+                            hx-target="#modal-tab-content"
+                            hx-swap="innerHTML"
+                            onclick="activateTab(this)">Info</button>
+                    <button class="modal-tab"
+                            hx-get="/partials/modal-tab/@cardId/collection"
+                            hx-target="#modal-tab-content"
+                            hx-swap="innerHTML"
+                            onclick="activateTab(this)">Collection</button>
+                    <button class="modal-tab"
+                            hx-get="/partials/modal-tab/@cardId/lists"
+                            hx-target="#modal-tab-content"
+                            hx-swap="innerHTML"
+                            onclick="activateTab(this)">Lists</button>
+                    <button class="modal-tab"
+                            hx-get="/partials/modal-tab/@cardId/purchases"
+                            hx-target="#modal-tab-content"
+                            hx-swap="innerHTML"
+                            onclick="activateTab(this)">Purchases</button>
+                </div>
+
+                <div id="modal-tab-content">
+                    <partial name="~/Views/Partials/_InfoSection.cshtml" model="detail" />
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+@if (imgSrc is not null)
+{
+    <div id="zoom-overlay" style="display:none" onclick="closeZoom()" class="image-zoom-overlay">
+        <img id="zoom-img" class="image-zoom-img" src="" alt="@name" />
+    </div>
+}

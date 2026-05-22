@@ -1,0 +1,72 @@
+@using ClintCardShop.Models
+@model PurchasesListViewModel
+
+@if (!Model.Purchases.Any())
+{
+    <div class="loc-empty">No purchases recorded yet.</div>
+}
+else
+{
+    var totalCards  = Model.Purchases.Sum(p => p.Quantity);
+    var totalSpent  = Model.Purchases.Sum(p => p.TotalCost);
+    var avg         = totalCards > 0 ? totalSpent / totalCards : 0;
+    var totalLinked = Model.LinkedQty.Values.Sum();
+    var unlinked    = totalCards - totalLinked;
+
+    <div class="purchase-summary-bar">
+        <div class="purchase-stat">
+            <span class="purchase-stat-value">@Model.Purchases.Count</span>
+            <span class="purchase-stat-label">Purchases</span>
+        </div>
+        <div class="purchase-stat">
+            <span class="purchase-stat-value">$@totalSpent.ToString("F2")</span>
+            <span class="purchase-stat-label">Total Spent</span>
+        </div>
+        <div class="purchase-stat">
+            <span class="purchase-stat-value">@totalCards.ToString("N0")</span>
+            <span class="purchase-stat-label">Cards Acquired</span>
+        </div>
+        <div class="purchase-stat">
+            <span class="purchase-stat-value" style="color:@(unlinked > 0 ? "var(--red)" : "var(--accent2)")">@unlinked.ToString("N0")</span>
+            <span class="purchase-stat-label">Unprocessed</span>
+        </div>
+        <div class="purchase-stat">
+            <span class="purchase-stat-value">$@avg.ToString("F3")</span>
+            <span class="purchase-stat-label">Avg Per Card</span>
+        </div>
+    </div>
+
+    <div class="location-grid">
+        @foreach (var p in Model.Purchases)
+        {
+            var linked     = Model.LinkedQty.TryGetValue(p.Id, out var lq) ? lq : 0;
+            var reconciled = linked >= p.Quantity;
+            var hasAny     = linked > 0;
+            <div class="location-card">
+                <div class="location-card-header">
+                    <a href="/purchases/@p.Id" class="list-name-link">@p.Description</a>
+                </div>
+                <div style="font-size:.75rem;color:var(--text2);margin:.1rem 0 .4rem;display:flex;gap:.4rem;flex-wrap:wrap;align-items:center">
+                    <span>@p.PurchasedAt.ToString("MMM d, yyyy")</span>
+                    <span>&bull;</span>
+                    <span>@p.Source</span>
+                    <span class="purchase-type-badge purchase-type-@p.Type.ToLower().Replace(" ", "")">@p.Type</span>
+                </div>
+                <div class="location-card-footer">
+                    <span class="location-count">$@p.TotalCost.ToString("F2") &bull; @p.Quantity.ToString("N0") cards</span>
+                    <div style="display:flex;gap:.4rem;align-items:center">
+                        @if (reconciled)       { <span class="reconcile-badge reconcile-ok">&#10003; Reconciled</span> }
+                        else if (hasAny)       { <span class="reconcile-badge reconcile-partial">@linked / @p.Quantity linked</span> }
+                        else                   { <span class="reconcile-badge reconcile-none">Unreconciled</span> }
+                        <button class="btn-delete"
+                                hx-post="/partials/purchases/@p.Id/delete"
+                                hx-target="#purchases-list"
+                                hx-swap="innerHTML"
+                                hx-include="[name='__RequestVerificationToken']"
+                                onclick="return confirm('Delete this purchase?')">Delete</button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}

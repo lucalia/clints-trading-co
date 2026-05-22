@@ -1,3 +1,4 @@
+@using ClintCardShop.Data
 @inject TcgDexService TcgDex
 @inject CollectionService Collection
 @inject LocationService LocationSvc
@@ -152,28 +153,34 @@
                             <div class="collection-section">
                                 <div class="collection-section-top">
                                     <span class="section-label" style="border:none;padding:0">My Collection</span>
-                                    <span class="collection-total">@_locationCounts.Values.Sum() total</span>
+                                    <span class="collection-total">@_instances.Count total</span>
                                 </div>
 
-                                @{ var assignments = _locationCounts.Where(kv => kv.Value > 0).ToList(); }
-                                @if (assignments.Any())
+                                @{
+                                    var groups = _instances
+                                        .GroupBy(i => new { i.LocationId, i.Variant })
+                                        .Select(g => new {
+                                            LocId = g.Key.LocationId,
+                                            Variant = g.Key.Variant,
+                                            Count = g.Count(),
+                                            Key = $"{g.Key.LocationId}:{g.Key.Variant}"
+                                        }).ToList();
+                                }
+                                @if (_instances.Any())
                                 {
                                     <div class="loc-assignments">
-                                        @foreach (var kv in assignments)
+                                        @foreach (var grp in groups)
                                         {
-                                            var parts       = kv.Key.Split(':');
-                                            var locId       = int.Parse(parts[0]);
-                                            var variantLbl  = parts[1];
-                                            var locLbl      = locId == 0 ? "Collection" : (_locations.FirstOrDefault(l => l.Id == locId)?.Name ?? "?");
-                                            var isMoving    = _movingKey == kv.Key;
+                                            var locLbl   = grp.LocId == CollectionDbContext.DefaultLocationId ? "Collection" : (_locations.FirstOrDefault(l => l.Id == grp.LocId)?.Name ?? "?");
+                                            var isMoving = _movingKey == grp.Key;
 
                                             <div class="loc-assignment-row">
-                                                <span>@variantLbl &bull; @locLbl</span>
+                                                <span>@grp.Variant &bull; @locLbl</span>
                                                 <span class="loc-row-right">
-                                                    <span>@kv.Value</span>
+                                                    <span>@grp.Count</span>
                                                     <button class="btn-move @(isMoving ? "active" : "")"
                                                             title="Move copies"
-                                                            @onclick="() => ToggleMove(kv.Key, kv.Value)">
+                                                            @onclick="() => ToggleMove(grp.Key, grp.Count)">
                                                         <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
                                                             <path d="M9 4l4 4-4 4M13 8H3"/>
                                                         </svg>
@@ -183,21 +190,21 @@
                                             @if (isMoving)
                                             {
                                                 <div class="move-inline-form">
-                                                    <input type="number" class="loc-input" style="width:60px" min="1" max="@kv.Value"
+                                                    <input type="number" class="loc-input" style="width:60px" min="1" max="@grp.Count"
                                                            @bind="_moveCount" />
                                                     <span class="move-inline-label">to</span>
                                                     <select class="loc-select" @bind="_moveDestId">
-                                                        @if (locId != 0)
+                                                        @if (grp.LocId != CollectionDbContext.DefaultLocationId)
                                                         {
-                                                            <option value="0">Collection</option>
+                                                            <option value="@CollectionDbContext.DefaultLocationId">Collection</option>
                                                         }
-                                                        @foreach (var loc in _locations.Where(l => l.Id != locId))
+                                                        @foreach (var loc in _locations.Where(l => l.Id != grp.LocId))
                                                         {
                                                             <option value="@loc.Id">@loc.Name</option>
                                                         }
                                                     </select>
                                                     <button class="btn-add" style="padding:.3rem .65rem;font-size:.8rem"
-                                                            @onclick="() => ExecuteMoveAsync(cardId, variantLbl, locId)">Move</button>
+                                                            @onclick="() => ExecuteMoveAsync(cardId, grp.Variant, grp.LocId)">Move</button>
                                                     <button class="btn-cancel" @onclick="() => _movingKey = null">Cancel</button>
                                                 </div>
                                             }
@@ -218,7 +225,7 @@
 
                                 <div class="loc-select-row">
                                     <select class="loc-dropdown" @bind="_selectedLocationId" @bind:after="SyncInput">
-                                        <option value="0">Collection</option>
+                                        <option value="@CollectionDbContext.DefaultLocationId">Collection</option>
                                         @foreach (var loc in _locations)
                                         {
                                             <option value="@loc.Id">@loc.Name</option>
@@ -283,8 +290,8 @@
                                 </div>
                                 @if (_purchasesLoaded)
                                 {
-                                    var totalOwned  = _locationCounts.Values.Sum();
-                                    var totalLinked = _cardPurchases.Sum(x => x.Quantity);
+                                    var totalOwned  = _instances.Count;
+                                    var totalLinked = _cardPurchases.Count;
                                     @if (totalOwned > 0)
                                     {
                                         <div style="margin-bottom:.5rem">
@@ -312,11 +319,10 @@
                                     @if (_cardPurchases.Count > 0)
                                     {
                                         <div class="loc-assignments">
-                                            @foreach (var (purchase, locId, variant, qty) in _cardPurchases)
+                                            @foreach (var (purchase, instance) in _cardPurchases)
                                             {
-                                                var perCard  = purchase.Quantity > 0 ? purchase.TotalCost / purchase.Quantity : 0;
-                                                var thisCost = perCard * qty;
-                                                var locName  = locId == 0 ? "Collection" : (_locations.FirstOrDefault(l => l.Id == locId)?.Name ?? "?");
+                                                var perCard = purchase.Quantity > 0 ? purchase.TotalCost / purchase.Quantity : 0;
+                                                var locName = instance.LocationId == CollectionDbContext.DefaultLocationId ? "Collection" : (_locations.FirstOrDefault(l => l.Id == instance.LocationId)?.Name ?? "?");
                                                 <div class="loc-assignment-row" style="align-items:flex-start">
                                                     <div style="min-width:0;flex:1">
                                                         <div style="font-weight:600;font-size:.82rem">
@@ -324,12 +330,12 @@
                                                         </div>
                                                         <div style="font-size:.75rem;color:var(--text2)">@purchase.Description</div>
                                                         <div style="font-size:.72rem;color:var(--accent2);margin-top:.1rem">
-                                                            $@thisCost.ToString("F3") total &bull; $@perCard.ToString("F3") lot avg
+                                                            $@perCard.ToString("F3") lot avg
                                                         </div>
                                                         <div style="font-size:.7rem;color:var(--text2)">Location: @locName</div>
                                                     </div>
                                                     <div style="display:flex;align-items:center;gap:.3rem;flex-shrink:0">
-                                                        <span class="variant-chip">@VariantShort(variant) &#215;@qty</span>
+                                                        <span class="variant-chip">@VariantShort(instance.Variant)</span>
                                                         @if (!string.IsNullOrWhiteSpace(purchase.ReceiptUrl))
                                                         {
                                                             <a href="@purchase.ReceiptUrl" target="_blank" rel="noopener"
@@ -359,7 +365,7 @@
                                             <div class="set-pick-list" style="max-height:180px">
                                                 @foreach (var p in _allPurchases)
                                                 {
-                                                    var remaining = p.Quantity - _purchaseLinkedQty.GetValueOrDefault(p.Id, 0);
+                                                    var remaining = p.Quantity - (_purchaseLinkedQty.TryGetValue(p.Id, out var plq) ? plq : 0);
                                                     var isSelected = _linkPurchaseId == p.Id;
                                                     <button class="set-pick-item @(isSelected ? "active" : "")"
                                                             style="@(isSelected ? "border-color:var(--accent)" : "")"
@@ -373,7 +379,7 @@
                                                     </button>
                                                 }
                                             </div>
-                                            @if (_linkPurchaseId > 0)
+                                            @if (!string.IsNullOrEmpty(_linkPurchaseId))
                                             {
                                                 var selPurchase = _allPurchases.FirstOrDefault(p => p.Id == _linkPurchaseId);
                                                 <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
@@ -389,7 +395,7 @@
                                                     <label class="configure-label">
                                                         Location
                                                         <select class="loc-select" @bind="_linkLocationId">
-                                                            <option value="0">Collection</option>
+                                                            <option value="@CollectionDbContext.DefaultLocationId">Collection</option>
                                                             @foreach (var loc in _locations)
                                                             {
                                                                 <option value="@loc.Id">@loc.Name</option>
@@ -414,7 +420,7 @@
                                             @if (_linkError is not null) { <div class="form-error">@_linkError</div> }
                                             <div style="display:flex;gap:.4rem">
                                                 <button class="btn-add" style="flex:1"
-                                                        disabled="@(_linkPurchaseId <= 0)"
+                                                        disabled="@(string.IsNullOrEmpty(_linkPurchaseId))"
                                                         @onclick="SubmitLinkFromModalAsync">Link</button>
                                                 <button class="btn-cancel" @onclick="() => { _showLinkForm = false; _linkError = null; }">Cancel</button>
                                             </div>
@@ -446,10 +452,10 @@
     private CardDetail? _detail;
     private bool _detailLoading;
     private bool _zoomed;
-    private Dictionary<string, int> _locationCounts = new();
+    private List<CardInstance> _instances = new();
     private List<Location> _locations = new();
     private bool _locationsLoaded;
-    private int _selectedLocationId;
+    private string _selectedLocationId = CollectionDbContext.DefaultLocationId;
     private string _selectedVariant = "Normal";
     private int _countInput;
     private string _tab = "collection";
@@ -457,18 +463,18 @@
     // Move state
     private string? _movingKey;
     private int _moveCount = 1;
-    private int _moveDestId;
+    private string _moveDestId = CollectionDbContext.DefaultLocationId;
 
     // Lists tab
     private List<(CardList List, List<(string Variant, int Count)> Chips)> _cardLists = new();
     private bool _listsLoaded;
-    private List<(Purchase P, int LocationId, string Variant, int Quantity)> _cardPurchases = new();
+    private List<(Purchase P, CardInstance Instance)> _cardPurchases = new();
     private bool _purchasesLoaded;
     private List<Purchase> _allPurchases = new();
-    private Dictionary<int, int> _purchaseLinkedQty = new();
+    private Dictionary<string, int> _purchaseLinkedQty = new();
     private bool _showLinkForm;
-    private int _linkPurchaseId;
-    private int _linkLocationId;
+    private string _linkPurchaseId = "";
+    private string _linkLocationId = CollectionDbContext.DefaultLocationId;
     private string _linkVariant = "Normal";
     private int _linkQty = 1;
     private string? _linkError;
@@ -478,7 +484,7 @@
         await JS.InvokeVoidAsync("lockScroll");
         _card           = card;
         _detail         = null;
-        _locationCounts = new();
+        _instances      = new();
         _detailLoading  = true;
         _movingKey      = null;
         _listsLoaded    = false;
@@ -487,7 +493,7 @@
         _cardPurchases  .Clear();
         _showLinkForm   = false;
         _linkError      = null;
-        _linkPurchaseId = 0;
+        _linkPurchaseId = "";
         _tab            = ReadOnly ? "info" : (defaultTab ?? "collection");
         StateHasChanged();
 
@@ -495,7 +501,7 @@
         var setId = idx > 0 ? card.Id[..idx] : card.Id;
         try { _detail = await TcgDex.GetCardAsync(setId, card.LocalId); } catch { }
         if (!ReadOnly)
-            _locationCounts = await Collection.GetCardBreakdownAsync(card.Id);
+            _instances = await Collection.GetByCardAsync(card.Id);
 
         if (!_locationsLoaded && !ReadOnly)
         {
@@ -527,18 +533,22 @@
         if (_card is null) return;
         var cardId    = _detail?.Id ?? _card.Id;
         var allLists  = await ListSvc.GetAllAsync();
-        var listData  = await ListSvc.GetListVariantCountsByCardAsync(cardId);
-        _cardLists    = allLists
-            .Where(l => listData.ContainsKey(l.Id))
-            .Select(l =>
+        var cardLists = new List<(CardList List, List<(string Variant, int Count)> Chips)>();
+        foreach (var list in allLists.Where(l => l.Type != "Wishlist"))
+        {
+            var listInstances = await ListSvc.GetInstancesByListAsync(list.Id);
+            var cardInList    = listInstances.Where(i => i.CardId == cardId).ToList();
+            if (cardInList.Any())
             {
-                var chips = listData[l.Id]
-                    .Select(kv => (kv.Key, kv.Value))
+                var chips = cardInList
+                    .GroupBy(i => i.Variant)
+                    .Select(g => (g.Key, g.Count()))
                     .OrderBy(x => x.Item1)
                     .ToList();
-                return (List: l, Chips: chips);
-            })
-            .ToList();
+                cardLists.Add((list, chips));
+            }
+        }
+        _cardLists   = cardLists;
         _listsLoaded = true;
     }
 
@@ -546,9 +556,9 @@
     {
         if (_card is null) return;
         var cardId = _detail?.Id ?? _card.Id;
-        var byCardTask  = PurchaseSvc.GetPurchasesByCardAsync(cardId);
+        var byCardTask  = PurchaseSvc.GetInstancesByCardAsync(cardId);
         var allTask     = PurchaseSvc.GetAllAsync();
-        var linkedTask  = PurchaseSvc.GetLinkedQuantityPerPurchaseAsync();
+        var linkedTask  = PurchaseSvc.GetLinkedCountsPerPurchaseAsync();
         await Task.WhenAll(byCardTask, allTask, linkedTask);
         _cardPurchases      = byCardTask.Result;
         _allPurchases       = allTask.Result;
@@ -563,8 +573,8 @@
             var p = _allPurchases.FirstOrDefault(x => x.Id == _linkPurchaseId);
             if (p is null || _card is null) return 999;
             var cardId   = _detail?.Id ?? _card.Id;
-            var total    = _purchaseLinkedQty.GetValueOrDefault(_linkPurchaseId, 0);
-            var existing = _cardPurchases.Where(x => x.P.Id == _linkPurchaseId && x.Variant == _linkVariant).Sum(x => x.Quantity);
+            var total    = _purchaseLinkedQty.TryGetValue(_linkPurchaseId, out var tl) ? tl : 0;
+            var existing = _cardPurchases.Where(x => x.P.Id == _linkPurchaseId && x.Instance.Variant == _linkVariant).Count();
             return Math.Max(0, p.Quantity - (total - existing));
         }
     }
@@ -577,14 +587,17 @@
 
     private async Task SubmitLinkFromModalAsync()
     {
-        if (_linkPurchaseId <= 0 || _card is null) { _linkError = "Select a purchase first."; return; }
+        if (string.IsNullOrEmpty(_linkPurchaseId) || _card is null) { _linkError = "Select a purchase first."; return; }
         if (_linkQty > ModalMaxLinkQty) { _linkError = $"Only {ModalMaxLinkQty} slot{(ModalMaxLinkQty == 1 ? "" : "s")} remaining."; return; }
         var cardId = _detail?.Id ?? _card.Id;
-        await PurchaseSvc.SetPurchaseCardAsync(_linkPurchaseId, cardId, _linkLocationId, _linkVariant, _linkQty);
-        _showLinkForm   = false;
-        _linkError      = null;
+        for (int i = 0; i < _linkQty; i++)
+            await Collection.AddInstanceAsync(cardId, _linkVariant, _linkLocationId, _linkPurchaseId, Array.Empty<string>());
+        _instances       = await Collection.GetByCardAsync(cardId);
+        _showLinkForm    = false;
+        _linkError       = null;
         _purchasesLoaded = false;
         await LoadPurchasesAsync();
+        await OnCountChanged.InvokeAsync((cardId, _instances.Count));
     }
 
     private async Task Close()
@@ -609,8 +622,8 @@
         return list.Count > 0 ? list : ["Normal"];
     }
 
-    private int GetCount(int locationId, string variant) =>
-        _locationCounts.GetValueOrDefault($"{locationId}:{variant}");
+    private int GetCount(string locationId, string variant) =>
+        _instances.Count(i => i.LocationId == locationId && i.Variant == variant);
 
     private void SyncInput() => _countInput = GetCount(_selectedLocationId, _selectedVariant);
 
@@ -630,14 +643,23 @@
         SyncInput();
     }
 
-    private async Task AdjustCount(string cardId, int locationId, string variant, int delta)
+    private async Task AdjustCount(string cardId, string locationId, string variant, int delta)
     {
-        var newTotal = await Collection.AdjustCountAsync(cardId, locationId, variant, delta);
-        var key      = $"{locationId}:{variant}";
-        var newLoc   = Math.Max(0, _locationCounts.GetValueOrDefault(key) + delta);
-        if (newLoc == 0) _locationCounts.Remove(key);
-        else _locationCounts[key] = newLoc;
-        await OnCountChanged.InvokeAsync((cardId, newTotal));
+        if (delta > 0)
+        {
+            for (int i = 0; i < delta; i++)
+                await Collection.AddInstanceAsync(cardId, variant, locationId, null, Array.Empty<string>());
+        }
+        else if (delta < 0)
+        {
+            var toRemove = _instances
+                .Where(i => i.LocationId == locationId && i.Variant == variant)
+                .Take(-delta).ToList();
+            foreach (var inst in toRemove)
+                await Collection.RemoveInstanceAsync(inst.Id);
+        }
+        _instances = await Collection.GetByCardAsync(cardId);
+        await OnCountChanged.InvokeAsync((cardId, _instances.Count));
     }
 
     // ── Move ──────────────────────────────────────────────────────────────
@@ -647,20 +669,25 @@
         if (_movingKey == key) { _movingKey = null; return; }
         _movingKey  = key;
         _moveCount  = Math.Min(1, currentCount);
-        var srcLocId = int.Parse(key.Split(':')[0]);
-        _moveDestId  = srcLocId == 0
-            ? (_locations.FirstOrDefault()?.Id ?? 0)
-            : 0;
+        var srcLocId = key.Split(':')[0];
+        _moveDestId  = srcLocId == CollectionDbContext.DefaultLocationId
+            ? (_locations.FirstOrDefault()?.Id ?? CollectionDbContext.DefaultLocationId)
+            : CollectionDbContext.DefaultLocationId;
     }
 
-    private async Task ExecuteMoveAsync(string cardId, string variant, int fromLocId)
+    private async Task ExecuteMoveAsync(string cardId, string variant, string fromLocId)
     {
         if (_moveCount <= 0 || _moveDestId == fromLocId) return;
-        await Collection.MoveCardCountAsync(cardId, variant, fromLocId, _moveDestId, _moveCount);
-        _locationCounts = await Collection.GetCardBreakdownAsync(cardId);
-        _movingKey      = null;
+        // Move _moveCount instances from fromLocId to _moveDestId
+        var toMove = _instances
+            .Where(i => i.LocationId == fromLocId && i.Variant == variant)
+            .Take(_moveCount).ToList();
+        foreach (var inst in toMove)
+            await Collection.MoveInstanceAsync(inst.Id, _moveDestId);
+        _instances = await Collection.GetByCardAsync(cardId);
+        _movingKey = null;
         SyncInput();
-        await OnCountChanged.InvokeAsync((cardId, _locationCounts.Values.Sum()));
+        await OnCountChanged.InvokeAsync((cardId, _instances.Count));
     }
 
     private static string VariantShort(string v) => v switch

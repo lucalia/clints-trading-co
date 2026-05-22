@@ -1,0 +1,82 @@
+@using ClintCardShop.Controllers
+@using ClintCardShop.Models
+@model DetailCardGridViewModel
+
+<div class="card-grid-wrapper">
+    <div class="card-grid">
+        @foreach (var card in Model.Cards)
+        {
+            var chips = Model.VariantCounts
+                .Where(kv => kv.Key.StartsWith(card.Id + ":") && kv.Value > 0)
+                .Select(kv => (Variant: kv.Key.Split(':')[1], Count: kv.Value))
+                .OrderBy(x => x.Variant)
+                .ToList();
+            var total = chips.Sum(c => c.Count);
+
+            <div class="card-tile"
+                 hx-get="/partials/card-modal/@card.Id"
+                 hx-target="#modal-host"
+                 hx-swap="innerHTML"
+                 style="cursor:pointer">
+                <div class="card-image-wrap">
+                    @if (card.Image is not null)
+                    {
+                        <img class="card-image"
+                             src="@(card.Image + "/low.webp")"
+                             alt="@card.Name"
+                             loading="lazy"
+                             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+                        <div class="card-image-placeholder" style="display:none">?</div>
+                    }
+                    else
+                    {
+                        <div class="card-image-placeholder">?</div>
+                    }
+                    @if (chips.Count > 0)
+                    {
+                        <div class="card-variant-overlay">
+                            @foreach (var (variant, count) in chips)
+                            {
+                                <span class="variant-chip">@PartialsController.VariantShort(variant) &#215;@count</span>
+                            }
+                        </div>
+                    }
+                    @if (total > 0)
+                    {
+                        <div class="collection-badge">&#215;@total</div>
+                    }
+                </div>
+                <div class="card-tile-footer">
+                    <span class="card-tile-name">@card.Name</span>
+                    <span class="card-tile-id">#@card.LocalId</span>
+                    @if (Model.RemoveUrl is not null)
+                    {
+                        <button class="card-remove-btn"
+                                title="Remove from list"
+                                hx-post="@Model.RemoveUrl"
+                                hx-vals='{"cardId":"@card.Id"}'
+                                hx-target="#list-cards"
+                                hx-swap="innerHTML"
+                                hx-include="[name='__RequestVerificationToken']"
+                                onclick="event.stopPropagation()">&#10005;</button>
+                    }
+                    @if (Model.UnlinkUrl is not null)
+                    {
+                        <button class="card-remove-btn"
+                                title="Unlink from purchase"
+                                hx-post="@Model.UnlinkUrl"
+                                hx-vals='{"cardId":"@card.Id"}'
+                                hx-target="#purchase-cards"
+                                hx-swap="innerHTML"
+                                hx-include="[name='__RequestVerificationToken']"
+                                onclick="event.stopPropagation()">&#10005;</button>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+@if (!Model.Cards.Any())
+{
+    <div class="loc-empty">No cards here yet.</div>
+}

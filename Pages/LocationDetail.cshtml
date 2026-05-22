@@ -1,0 +1,41 @@
+@page "/locations/{id}"
+@model ClintCardShop.Pages.LocationDetailModel
+@using ClintCardShop.Models
+@using ClintCardShop.Data
+@{
+    ViewData["Title"] = Model.LocationName ?? "Location";
+}
+
+@if (Model.IsNotFound)
+{
+    <div class="error-banner"><strong>Location not found.</strong></div>
+}
+else
+{
+    <div class="locations-page">
+        <div class="list-detail-header">
+            <a href="/locations" class="set-back-btn" title="All Locations">&#8592;</a>
+            <h2 class="page-title" style="margin:0">@Model.LocationName</h2>
+            @if (Model.Id == CollectionDbContext.DefaultLocationId) { <span class="list-shared-badge">Default</span> }
+        </div>
+
+        @if (Model.CardBriefs.Count == 0)
+        {
+            <div class="loc-empty">No cards stored in this location.</div>
+        }
+        else
+        {
+            <div class="location-cards-summary">
+                @Model.CardBriefs.Count unique card@(Model.CardBriefs.Count == 1 ? "" : "s") &mdash;
+                @Model.CardBriefs.Sum(x => x.Count) total @(Model.CardBriefs.Sum(x => x.Count) == 1 ? "copy" : "copies")
+            </div>
+            <div id="location-cards">
+                <partial name="~/Views/Partials/_DetailCardGrid.cshtml"
+                         model="new ClintCardShop.Models.DetailCardGridViewModel(
+                             Model.CardBriefs.Select(x => x.Card).ToList(),
+                             Model.VariantCounts,
+                             null, null)" />
+            </div>
+        }
+    </div>
+}

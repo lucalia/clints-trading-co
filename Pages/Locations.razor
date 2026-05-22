@@ -1,5 +1,6 @@
 @page "/locations"
 @attribute [Authorize]
+@using ClintCardShop.Data
 @inject LocationService LocationSvc
 @inject CollectionService Collection
 
@@ -37,7 +38,7 @@
                     <span class="list-shared-badge">Default</span>
                 </div>
                 <div class="location-card-footer">
-                    <span class="location-count">@(_cardCounts.GetValueOrDefault(0)) copies stored</span>
+                    <span class="location-count">@(_cardCounts.TryGetValue(CollectionDbContext.DefaultLocationId, out var defCnt) ? defCnt : 0) copies stored</span>
                 </div>
             </div>
             @foreach (var loc in _locations)
@@ -54,7 +55,7 @@
                         }
                     </div>
                     <div class="location-card-footer">
-                        <span class="location-count">@(_cardCounts.GetValueOrDefault(loc.Id)) copies stored</span>
+                        <span class="location-count">@(_cardCounts.TryGetValue(loc.Id, out var locCnt) ? locCnt : 0) copies stored</span>
                         <div class="location-actions">
                             @if (_editingId == loc.Id)
                             {
@@ -76,11 +77,11 @@
 
 @code {
     private List<Location> _locations = new();
-    private Dictionary<int, int> _cardCounts = new();
+    private Dictionary<string, int> _cardCounts = new();
     private bool _loading = true;
     private string _newName = "";
     private string? _addError;
-    private int _editingId = -1;
+    private string _editingId = "";
     private string _editName = "";
 
     protected override async Task OnInitializedAsync()
@@ -92,7 +93,7 @@
     private async Task RefreshAsync()
     {
         var locsTask   = LocationSvc.GetAllAsync();
-        var countsTask = LocationSvc.GetCardCountsPerLocationAsync();
+        var countsTask = Collection.GetCountsPerLocationAsync();
         await Task.WhenAll(locsTask, countsTask);
         _locations  = locsTask.Result;
         _cardCounts = countsTask.Result;
@@ -114,17 +115,17 @@
 
     private void StartEdit(Location loc) { _editingId = loc.Id; _editName = loc.Name; }
 
-    private async Task SaveEditAsync(int id)
+    private async Task SaveEditAsync(string id)
     {
         if (string.IsNullOrWhiteSpace(_editName)) return;
         await LocationSvc.UpdateAsync(id, _editName);
-        _editingId = -1;
+        _editingId = "";
         await RefreshAsync();
     }
 
-    private void CancelEdit() => _editingId = -1;
+    private void CancelEdit() => _editingId = "";
 
-    private async Task DeleteAsync(int id)
+    private async Task DeleteAsync(string id)
     {
         await LocationSvc.DeleteAsync(id);
         await RefreshAsync();

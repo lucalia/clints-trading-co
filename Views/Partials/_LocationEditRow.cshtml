@@ -1,0 +1,22 @@
+@using ClintCardShop.Data
+@model Location
+
+<div class="location-card" id="loc-@Model.Id">
+    <form hx-post="/partials/locations/@Model.Id/save"
+          hx-target="#locations-list"
+          hx-swap="innerHTML"
+          hx-include="[name='__RequestVerificationToken']">
+        <div class="location-card-header">
+            <input class="loc-input inline" type="text" name="name" value="@Model.Name" maxlength="60" required autofocus />
+        </div>
+        <div class="location-card-footer">
+            <div class="location-actions">
+                <button type="submit" class="btn-save">Save</button>
+                <button type="button" class="btn-cancel"
+                        hx-get="/partials/locations/@Model.Id/cancel"
+                        hx-target="#loc-@Model.Id"
+                        hx-swap="outerHTML">Cancel</button>
+            </div>
+        </div>
+    </form>
+</div>

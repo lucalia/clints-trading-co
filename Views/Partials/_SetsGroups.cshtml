@@ -1,0 +1,35 @@
+@using ClintCardShop.Models
+@model SetsSearchModel
+
+@foreach (var (serie, sets) in Model.Groups)
+{
+    <div class="series-section">
+        <h3 class="series-header">@SetGrouping.DisplayName(serie)</h3>
+        <div class="sets-grid">
+            @foreach (var set in sets)
+            {
+                <a class="set-card" href="/set/@set.Id">
+                    @if (set.Logo is not null)
+                    {
+                        <img class="set-logo" src="@(set.Logo + ".webp")" alt="@set.Name"
+                             loading="lazy"
+                             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+                        <div class="set-logo-placeholder" style="display:none">@set.Name</div>
+                    }
+                    else
+                    {
+                        <div class="set-logo-placeholder">@set.Name</div>
+                    }
+                    <div class="set-info">
+                        <span class="set-name">@set.Name</span>
+                        <span class="set-count">@(set.CardCount?.Total ?? 0) cards &bull; @set.Id</span>
+                    </div>
+                </a>
+            }
+        </div>
+    </div>
+}
+@if (!Model.Groups.Any())
+{
+    <div class="loc-empty">No sets match your search.</div>
+}

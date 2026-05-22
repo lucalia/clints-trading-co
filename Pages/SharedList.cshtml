@@ -1,0 +1,42 @@
+@page "/list/share/{token}"
+@model ClintCardShop.Pages.SharedListModel
+@using ClintCardShop.Models
+@{
+    ViewData["Title"] = Model.List?.Name ?? "Shared List";
+    Layout = "_Layout";
+}
+
+@if (Model.List is null)
+{
+    <div style="text-align:center;padding:4rem 0;color:var(--text2)">
+        <h2 style="color:var(--text);margin-bottom:.5rem">List not found</h2>
+        <p>This share link may have been revoked or is invalid.</p>
+    </div>
+}
+else
+{
+    <div class="locations-page">
+        <div class="list-detail-header">
+            <h2 class="page-title" style="margin:0">@Model.List.Name</h2>
+            @if (Model.List.Type == "Wishlist") { <span class="list-type-badge">Wishlist</span> }
+            <span class="list-shared-badge" style="margin-left:auto">Read-only shared view</span>
+        </div>
+
+        @if (Model.CardBriefs.Count == 0)
+        {
+            <div class="loc-empty">This list has no cards.</div>
+        }
+        else
+        {
+            <div class="location-cards-summary">
+                @Model.CardBriefs.Count unique card@(Model.CardBriefs.Count == 1 ? "" : "s") &mdash;
+                @Model.CardBriefs.Sum(x => x.Count) total @(Model.CardBriefs.Sum(x => x.Count) == 1 ? "copy" : "copies")
+            </div>
+            <partial name="~/Views/Partials/_DetailCardGrid.cshtml"
+                     model="new ClintCardShop.Models.DetailCardGridViewModel(
+                         Model.CardBriefs.Select(x => x.Card).ToList(),
+                         Model.VariantCounts,
+                         null, null)" />
+        }
+    </div>
+}

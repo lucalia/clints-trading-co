@@ -1,0 +1,38 @@
+@page
+@model ClintCardShop.Pages.ListsModel
+@using ClintCardShop.Models
+@{
+    ViewData["Title"] = "Lists";
+    var token = ((Microsoft.AspNetCore.Mvc.RazorPages.PageModel)Model).HttpContext
+        .RequestServices
+        .GetRequiredService<Microsoft.AspNetCore.Antiforgery.IAntiforgery>()
+        .GetAndStoreTokens(((Microsoft.AspNetCore.Mvc.RazorPages.PageModel)Model).HttpContext)
+        .RequestToken;
+}
+
+<div class="locations-page">
+    <h2 class="page-title">My Lists</h2>
+
+    <div class="add-location-form">
+        <h3 class="form-title">New List</h3>
+        <form hx-post="/partials/lists"
+              hx-target="#lists-list"
+              hx-swap="innerHTML"
+              hx-on::after-request="this.reset()">
+            <input type="hidden" name="__RequestVerificationToken" value="@token" />
+            <div class="form-row">
+                <input class="loc-input" type="text" name="name" placeholder="Name (e.g. Trade Binder)" maxlength="60" required />
+                <select class="loc-select" name="type">
+                    <option value="Standard">Standard</option>
+                    <option value="Wishlist">Wishlist</option>
+                </select>
+                <button class="btn-add" type="submit">+ Create</button>
+            </div>
+        </form>
+    </div>
+
+    <div id="lists-list">
+        <partial name="~/Views/Partials/_ListsList.cshtml"
+                 model="new ClintCardShop.Models.ListsListViewModel(Model.Lists, Model.ListCounts)" />
+    </div>
+</div>

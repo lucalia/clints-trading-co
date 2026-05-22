@@ -60,8 +60,9 @@
                         }
                     </div>
                     <div class="location-card-footer">
-                        <span class="location-count">
-                            @(_listCounts.GetValueOrDefault(list.Id)) unique card@(_listCounts.GetValueOrDefault(list.Id) == 1 ? "" : "s")
+                        @{ var listCnt = _listCounts.TryGetValue(list.Id, out var lc) ? lc : 0; }
+                    <span class="location-count">
+                            @listCnt unique card@(listCnt == 1 ? "" : "s")
                         </span>
                         <div class="location-actions">
                             @if (_editingId == list.Id)
@@ -84,12 +85,12 @@
 
 @code {
     private List<CardList> _lists = new();
-    private Dictionary<int, int> _listCounts = new();
+    private Dictionary<string, int> _listCounts = new();
     private bool _loading = true;
     private string _newName = "";
     private string _newType = "Standard";
     private string? _createError;
-    private int _editingId = -1;
+    private string _editingId = "";
     private string _editName = "";
 
     protected override async Task OnInitializedAsync()
@@ -123,17 +124,17 @@
 
     private void StartEdit(CardList list) { _editingId = list.Id; _editName = list.Name; }
 
-    private async Task SaveEditAsync(int id)
+    private async Task SaveEditAsync(string id)
     {
         if (string.IsNullOrWhiteSpace(_editName)) return;
         await ListSvc.UpdateAsync(id, _editName);
-        _editingId = -1;
+        _editingId = "";
         await RefreshAsync();
     }
 
-    private void CancelEdit() => _editingId = -1;
+    private void CancelEdit() => _editingId = "";
 
-    private async Task DeleteAsync(int id)
+    private async Task DeleteAsync(string id)
     {
         await ListSvc.DeleteAsync(id);
         await RefreshAsync();

@@ -64,7 +64,18 @@ else
         _list = await ListSvc.GetByShareTokenAsync(Token);
         if (_list is not null)
         {
-            _variantCounts = await ListSvc.GetVariantCountsByListAsync(_list.Id);
+            if (_list.Type == "Wishlist")
+            {
+                var entries = await ListSvc.GetWishlistEntriesAsync(_list.Id);
+                _variantCounts = entries.ToDictionary(e => $"{e.CardId}:{e.Variant}", e => e.WantedCount);
+            }
+            else
+            {
+                var instances = await ListSvc.GetInstancesByListAsync(_list.Id);
+                _variantCounts = instances
+                    .GroupBy(i => $"{i.CardId}:{i.Variant}")
+                    .ToDictionary(g => g.Key, g => g.Count());
+            }
             var cardIds = _variantCounts.Keys.Select(k => k.Split(':')[0]).Distinct().ToHashSet();
             if (cardIds.Count > 0)
             {

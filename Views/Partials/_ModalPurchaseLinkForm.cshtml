@@ -1,0 +1,57 @@
+@using ClintCardShop.Models
+@model ModalLinkPurchaseFormViewModel
+
+<div class="collection-section" style="margin-top:.75rem;border-top:1px solid var(--border);padding-top:.75rem">
+    <div class="section-label" style="border:none;padding:0;margin-bottom:.5rem">Link to a Purchase</div>
+    <form hx-post="/partials/modal-tab/@Model.CardId/purchases/submit-link"
+          hx-target="#modal-tab-content"
+          hx-swap="innerHTML">
+        @Html.AntiForgeryToken()
+        <div class="configure-fields" style="gap:.5rem">
+            <label class="configure-label">
+                Purchase
+                <select class="loc-select" name="PurchaseId" style="width:100%">
+                    <option value="0">— select —</option>
+                    @foreach (var p in Model.Purchases)
+                    {
+                        var totalLinked = Model.LinkedQty.TryGetValue(p.Id, out var tlq) ? tlq : 0;
+                        var remaining   = p.Quantity - totalLinked;
+                        @if (remaining > 0)
+                        {
+                            <option value="@p.Id">@p.Description (@p.PurchasedAt.ToString("MMM d, yyyy") — @remaining slots left)</option>
+                        }
+                    }
+                </select>
+            </label>
+            <label class="configure-label">
+                Variant
+                <select class="loc-select" name="Variant">
+                    @foreach (var v in Model.Variants)
+                    {
+                        <option value="@v">@(v == "FirstEdition" ? "1st Edition" : v)</option>
+                    }
+                </select>
+            </label>
+            <label class="configure-label">
+                Location
+                <select class="loc-select" name="LocationId">
+                    <option value="0">Collection</option>
+                    @foreach (var loc in Model.Locations)
+                    {
+                        <option value="@loc.Id">@loc.Name</option>
+                    }
+                </select>
+            </label>
+            <label class="configure-label">
+                Qty <input class="loc-input" style="width:70px" type="number" name="Qty" min="1" value="1" />
+            </label>
+        </div>
+        <div style="display:flex;gap:.4rem;margin-top:.5rem">
+            <button type="submit" class="btn-add" style="flex:1">Link</button>
+            <button type="button" class="btn-cancel"
+                    hx-get="/partials/modal-tab/@Model.CardId/purchases"
+                    hx-target="#modal-tab-content"
+                    hx-swap="innerHTML">Cancel</button>
+        </div>
+    </form>
+</div>

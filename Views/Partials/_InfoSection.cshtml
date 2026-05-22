@@ -1,0 +1,80 @@
+@using ClintCardShop.Controllers
+@using ClintCardShop.Models
+@using Microsoft.AspNetCore.Html
+@model CardDetail?
+
+@if (Model is null)
+{
+    <p class="effect-text" style="margin-top:.5rem;color:var(--text2)">Could not load card details.</p>
+}
+else
+{
+    <div class="modal-badges-row">
+        @foreach (var type in Model.Types ?? Enumerable.Empty<string>())
+        {
+            <span class="type-badge" style="background:@PartialsController.TypeColor(type)">@type</span>
+        }
+        @if (Model.TrainerType is not null) { <span class="meta-chip trainer">@Model.TrainerType</span> }
+        @if (Model.Stage is not null)       { <span class="meta-chip">@Model.Stage</span> }
+        @if (Model.Rarity is not null)      { <span class="meta-chip rarity">@Model.Rarity</span> }
+    </div>
+
+    @if (Model.Effect is not null)
+    {
+        <div class="section-label">Card Text</div>
+        <div class="trainer-effect-block">@Html.Raw(PartialsController.RenderEffectText(Model.Effect))</div>
+    }
+
+    @if (Model.Abilities?.Count > 0)
+    {
+        <div class="section-label">Abilities</div>
+        @foreach (var ability in Model.Abilities)
+        {
+            <div class="ability-block">
+                <span class="ability-name">@ability.Name</span>
+                @if (ability.Type is not null) { <span class="ability-type-tag">@ability.Type</span> }
+                @if (ability.Effect is not null) { <p class="effect-text">@Html.Raw(PartialsController.RenderEffectText(ability.Effect))</p> }
+            </div>
+        }
+    }
+
+    @if (Model.Attacks?.Count > 0)
+    {
+        <div class="section-label">Attacks</div>
+        @foreach (var atk in Model.Attacks)
+        {
+            <div class="attack-block">
+                <div class="attack-header">
+                    <div class="attack-cost">
+                        @foreach (var cost in atk.Cost)
+                        {
+                            @if (PartialsController.HasEnergyImage(cost))
+                            {
+                                <span class="energy-coin energy-@cost.ToLower()" title="@cost"></span>
+                            }
+                            else
+                            {
+                                <span class="energy-coin" style="background:@PartialsController.TypeColor(cost)" title="@cost">
+                                    @(cost switch { "Dragon" => "N", "Fairy" => "Y", "Colorless" => "C", _ => "?" })
+                                </span>
+                            }
+                        }
+                    </div>
+                    <span class="attack-name">@atk.Name</span>
+                    @if (!string.IsNullOrEmpty(atk.Damage))
+                    {
+                        <span class="attack-damage">@atk.Damage</span>
+                    }
+                </div>
+                @if (atk.Effect is not null) { <p class="effect-text">@Html.Raw(PartialsController.RenderEffectText(atk.Effect))</p> }
+            </div>
+        }
+    }
+
+    <div class="modal-footer-meta">
+        @if (Model.Illustrator is not null)    { <span>Illus.&nbsp;@Model.Illustrator</span> }
+        @if (Model.Retreat is not null)        { <span>Retreat:&nbsp;@Model.Retreat</span> }
+        @if (Model.RegulationMark is not null) { <span>Reg.&nbsp;@Model.RegulationMark</span> }
+        <span>@Model.Id</span>
+    </div>
+}
