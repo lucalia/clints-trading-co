@@ -89,6 +89,12 @@ using (var scope = app.Services.CreateScope())
                 PRIMARY KEY (PurchaseId, CardId, LocationId, Variant)
             )");
         db.Database.ExecuteSqlRaw(@"
+            CREATE TABLE IF NOT EXISTS ApiCache (
+                Url      TEXT PRIMARY KEY,
+                Body     TEXT NOT NULL DEFAULT '',
+                CachedAt TEXT NOT NULL DEFAULT (datetime('now'))
+            )");
+        db.Database.ExecuteSqlRaw(@"
             CREATE TABLE IF NOT EXISTS Purchases (
                 Id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 PurchasedAt TEXT    NOT NULL DEFAULT (date('now')),

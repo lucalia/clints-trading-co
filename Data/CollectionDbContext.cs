@@ -12,8 +12,13 @@ public class CollectionDbContext(DbContextOptions<CollectionDbContext> options) 
     public DbSet<Purchase> Purchases => Set<Purchase>();
     public DbSet<PurchaseCard> PurchaseCards => Set<PurchaseCard>();
 
+    public DbSet<ApiCacheEntry> ApiCache => Set<ApiCacheEntry>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<ApiCacheEntry>()
+            .HasKey(e => e.Url);
+
         modelBuilder.Entity<CollectionEntry>()
             .HasKey(e => new { e.CardId, e.LocationId, e.Variant });
 
@@ -73,6 +78,13 @@ public class PurchaseCard
     public int LocationId { get; set; } = 0;   // which copy/location this came from; 0 = unspecified
     public string Variant { get; set; } = "Normal";
     public int Quantity { get; set; } = 1;
+}
+
+public class ApiCacheEntry
+{
+    public string Url { get; set; } = "";
+    public string Body { get; set; } = "";
+    public DateTime CachedAt { get; set; }
 }
 
 public class Purchase
